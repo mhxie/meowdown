@@ -53,12 +53,33 @@ function renderQuoted(post: XPostBase, protocols: readonly string[] | null) {
   )
 }
 
+// Only shown while the stylesheet finds the body clamped.
+function renderShowMore(body: HTMLElement) {
+  const button = el(
+    'button',
+    { type: 'button', 'data-show-more': '', 'aria-expanded': 'false' },
+    'Show more',
+  )
+  button.addEventListener('click', () => {
+    const expanded = !body.hasAttribute('data-expanded')
+    body.toggleAttribute('data-expanded', expanded)
+    button.setAttribute('aria-expanded', String(expanded))
+    button.textContent = expanded ? 'Show less' : 'Show more'
+    // "Show less" can sit far below the post's start; keep it on screen
+    // once the body shrinks back.
+    if (!expanded) button.scrollIntoView({ block: 'nearest' })
+  })
+  return button
+}
+
 export function renderPost(post: XPost, protocols: readonly string[] | null = null) {
   const reply = post.replyTo
   const replyUrl =
     reply && /^\w{1,15}$/.test(reply.handle) && /^\d+$/.test(reply.id)
       ? `https://x.com/${reply.handle}/status/${reply.id}`
       : undefined
+  const body = renderBody(post)
+  if (post.body.length > 0) body.append(renderShowMore(body))
   return el(
     'article',
     {},
@@ -66,7 +87,7 @@ export function renderPost(post: XPost, protocols: readonly string[] | null = nu
     reply
       ? el('div', { 'data-reply-to': '' }, renderLink(`Replying to @${reply.handle}`, replyUrl))
       : undefined,
-    renderBody(post),
+    body,
     renderMedia(post.media, protocols, getPermalink(post)),
     post.quote ? renderQuoted(post.quote, protocols) : undefined,
     renderEdit(post),

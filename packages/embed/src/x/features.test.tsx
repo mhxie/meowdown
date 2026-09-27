@@ -203,3 +203,72 @@ describe('Full post snapshots', () => {
     })
   })
 })
+
+// Clamping needs scroll-driven animations and anchor positioning; without
+// them the card shows the whole post.
+const clampSupported =
+  CSS.supports('animation-timeline: scroll()') && CSS.supports('anchor-name: --a')
+
+describe('Long post bodies', () => {
+  const longText = Array.from({ length: 20 }, (_, index) => `Line ${index + 1}`).join('\n')
+
+  it.runIf(clampSupported)('clamps a long body until Show more is clicked', async () => {
+    const element = mount(createPost(longText))
+    const body = element.querySelector<HTMLElement>('[data-body]')!
+    const showMore = post.getByRole('button', { name: 'Show more' })
+    await expect.element(showMore).toHaveAttribute('aria-expanded', 'false')
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight)
+    await showMore.click()
+    const showLess = post.getByRole('button', { name: 'Show less' })
+    await expect.element(showLess).toHaveAttribute('aria-expanded', 'true')
+    expect(body.scrollHeight).toBe(body.clientHeight)
+    await showLess.click()
+    await expect.element(showMore).toBeVisible()
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight)
+  })
+
+  it.runIf(clampSupported)('places Show more below the clamped text', async () => {
+    const element = mount(createPost(longText))
+    const body = element.querySelector<HTMLElement>('[data-body]')!
+    await expect.element(post.getByRole('button', { name: 'Show more' })).toBeVisible()
+    const button = element.querySelector<HTMLElement>('[data-show-more]')!
+    const text = element.querySelector<HTMLElement>('[data-text]')!
+    expect(button.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      body.getBoundingClientRect().top + body.clientHeight,
+    )
+    expect(text.getBoundingClientRect().height).toBeGreaterThan(body.clientHeight)
+  })
+
+  it('shows no Show more when the whole body fits', async () => {
+    mount(createPost('A short post'))
+    await expect.element(post.getByText('A short post')).toBeVisible()
+    // Let the scroll timeline settle.
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    await expect.element(post.getByRole('button', { name: 'Show more' })).not.toBeInTheDocument()
+  })
+
+  it.runIf(!clampSupported)('shows the whole body without clamp support', async () => {
+    const element = mount(createPost(longText))
+    await expect.element(post.getByText(/Line 20/)).toBeVisible()
+    const body = element.querySelector<HTMLElement>('[data-body]')!
+    expect(body.scrollHeight).toBe(body.clientHeight)
+    await expect.element(post.getByRole('button', { name: 'Show more' })).not.toBeInTheDocument()
+  })
+
+  it.runIf(clampSupported)('keeps Show less in view while the expanded post scrolls', async () => {
+    const scroller = document.createElement('div')
+    scroller.style.cssText = 'height: 240px; overflow: auto'
+    const element = mount(createPost(longText))
+    scroller.append(element)
+    document.body.append(scroller)
+    await post.getByRole('button', { name: 'Show more' }).click()
+    scroller.scrollTop = 0
+    const showLess = element.querySelector<HTMLButtonElement>('[data-show-more]')!
+    await vi.waitFor(() => {
+      expect(showLess.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        scroller.getBoundingClientRect().bottom,
+      )
+    })
+  })
+})

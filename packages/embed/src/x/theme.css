@@ -33,6 +33,24 @@
   inherits: true;
 }
 
+@property --meowdown-embed-max-lines {
+  syntax: '*';
+  inherits: true;
+}
+
+@property --_body-clamped {
+  syntax: '<integer>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes meowdown-embed-body-clamped {
+  from,
+  to {
+    --_body-clamped: 1;
+  }
+}
+
 /*
  * Hard reset. `all: revert` rolls every property on every box inside the card
  * back to the user-agent default, so a host rule on `p`, `a`, `img`,
@@ -202,6 +220,79 @@
   }
   & [data-text] {
     white-space: pre-wrap;
+  }
+
+  /* Long posts. The clamped body is a scroll container, and its scroll
+   * timeline is active only while the clamp hides text, so the animation on
+   * that timeline sets `--_body-clamped` exactly when "Show more" is needed.
+   * The button is anchored below the body, outside its clip. Browsers without
+   * these features show the whole post. */
+  & [data-show-more] {
+    display: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.9375em;
+    color: var(--_link);
+    cursor: pointer;
+  }
+  & [data-show-more]:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+  & [data-show-more]:focus-visible {
+    outline: 2px solid var(--_link);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  @supports (animation-timeline: scroll()) and (anchor-name: --a) {
+    & > article {
+      anchor-scope: --meowdown-embed-body;
+    }
+    & > article > [data-body]:not([data-expanded]) {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: var(--meowdown-embed-max-lines, 10);
+      line-clamp: var(--meowdown-embed-max-lines, 10);
+      overflow: hidden;
+      anchor-name: --meowdown-embed-body;
+      animation: meowdown-embed-body-clamped linear both;
+      animation-timeline: scroll(self);
+      margin-block-end: calc(var(--_body-clamped) * 1.75rem);
+    }
+    & > article > [data-body]:not([data-expanded]) > [data-show-more] {
+      position: absolute;
+      position-anchor: --meowdown-embed-body;
+      top: anchor(bottom);
+      inset-inline-start: anchor(start);
+      margin-block-start: 0.25rem;
+    }
+    @container style(--_body-clamped: 1) {
+      & [data-show-more] {
+        display: block;
+      }
+    }
+    /* Expanded, "Show less" sticks to the bottom of the scrollport until the
+     * body's end scrolls into view. */
+    & > article > [data-body][data-expanded] > [data-show-more] {
+      display: block;
+      position: sticky;
+      bottom: 0.75rem;
+      z-index: 1;
+      margin: 0.5rem auto 0;
+      padding: 0.375rem 0.875rem;
+      border: 1px solid var(--_hairline);
+      border-radius: 999px;
+      background: var(--meowdown-embed-background, Canvas);
+      box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+      font-size: 0.875em;
+      font-weight: 500;
+    }
+    & > article > [data-body][data-expanded] > [data-show-more]:hover {
+      text-decoration: none;
+      background: color-mix(in srgb, var(--_link) 8%, var(--meowdown-embed-background, Canvas));
+    }
   }
 
   /* Media */
