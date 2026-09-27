@@ -203,3 +203,47 @@ describe('Full post snapshots', () => {
     })
   })
 })
+
+describe('Long post bodies', () => {
+  const longText = Array.from({ length: 20 }, (_, index) => `Line ${index + 1}`).join('\n')
+
+  it('clamps a long body until Show more is clicked', async () => {
+    const element = mount(createPost(longText))
+    const body = element.querySelector<HTMLElement>('[data-body]')!
+    const showMore = post.getByRole('button', { name: 'Show more' })
+    await expect.element(showMore).toHaveAttribute('aria-expanded', 'false')
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight)
+    await showMore.click()
+    const showLess = post.getByRole('button', { name: 'Show less' })
+    await expect.element(showLess).toHaveAttribute('aria-expanded', 'true')
+    expect(body.scrollHeight).toBe(body.clientHeight)
+    await showLess.click()
+    await expect.element(showMore).toBeVisible()
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight)
+  })
+
+  it('keeps Show more hidden when the whole body fits', async () => {
+    const element = mount(createPost('Line 1\nLine 2'))
+    await expect.element(post.getByText('Line 2')).toBeVisible()
+    // Let the resize observer report the body's first size.
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    expect(element.querySelector<HTMLButtonElement>('[data-show-more]')!.hidden).toBe(true)
+  })
+
+  it('keeps Show less in view while the expanded post scrolls', async () => {
+    const scroller = document.createElement('div')
+    scroller.style.cssText = 'height: 240px; overflow: auto'
+    const element = mount(createPost(longText))
+    scroller.append(element)
+    document.body.append(scroller)
+    await post.getByRole('button', { name: 'Show more' }).click()
+    scroller.scrollTop = 0
+    const showLess = element.querySelector<HTMLButtonElement>('[data-show-more]')!
+    await vi.waitFor(() => {
+      expect(showLess.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        scroller.getBoundingClientRect().bottom,
+      )
+    })
+  })
+})

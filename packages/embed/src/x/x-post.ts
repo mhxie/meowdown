@@ -14,6 +14,7 @@ import { renderLink } from '../render-link.ts'
 import { getRootContainer } from '../root.ts'
 
 import { renderPost } from './render-post.ts'
+import { setupShowMore } from './show-more.ts'
 
 export interface XPostProps extends FetchProps<XPostSnapshot> {
   mediaUrlProtocols: readonly string[] | null
@@ -43,7 +44,9 @@ export function useXPost(host: HostElement, props: State<XPostProps>): void {
     container.replaceChildren(
       valid ? renderPost(value, protocols) : renderFallback(pending.get(), url),
     )
+    const stopShowMore = setupShowMore(container)
     return () => {
+      stopShowMore?.()
       for (const video of container.querySelectorAll('video')) video.pause()
     }
   })

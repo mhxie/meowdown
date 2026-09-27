@@ -33,6 +33,11 @@
   inherits: true;
 }
 
+@property --meowdown-embed-max-lines {
+  syntax: '*';
+  inherits: true;
+}
+
 /*
  * Hard reset. `all: revert` rolls every property on every box inside the card
  * back to the user-agent default, so a host rule on `p`, `a`, `img`,
@@ -202,6 +207,53 @@
   }
   & [data-text] {
     white-space: pre-wrap;
+  }
+  /* A long post stops after a few lines until "Show more". */
+  & > article:not([data-expanded]) > [data-body] {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--meowdown-embed-max-lines, 10);
+    line-clamp: var(--meowdown-embed-max-lines, 10);
+    overflow: hidden;
+  }
+  & [data-show-more] {
+    display: block;
+    margin-block-start: 0.25rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.9375em;
+    color: var(--_link);
+    cursor: pointer;
+  }
+  & [data-show-more]:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+  & [data-show-more]:focus-visible {
+    outline: 2px solid var(--_link);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* Expanded, "Show less" sticks to the bottom of the scrollport until the
+   * post's end scrolls into view, so the post can be collapsed from anywhere. */
+  & > article[data-expanded] > [data-show-more] {
+    position: sticky;
+    bottom: 0.75rem;
+    z-index: 1;
+    margin: 0.5rem auto 0;
+    padding: 0.375rem 0.875rem;
+    border: 1px solid var(--_hairline);
+    border-radius: 999px;
+    background: var(--meowdown-embed-background, Canvas);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+    font-size: 0.875em;
+    font-weight: 500;
+  }
+  & > article[data-expanded] > [data-show-more]:hover {
+    text-decoration: none;
+    background: color-mix(in srgb, var(--_link) 8%, var(--meowdown-embed-background, Canvas));
   }
 
   /* Media */
