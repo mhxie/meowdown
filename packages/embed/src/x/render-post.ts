@@ -53,6 +53,29 @@ function renderQuoted(post: XPostBase, protocols: readonly string[] | null) {
   )
 }
 
+/**
+ * The main body with a disclosure that toggles its clamp. The stylesheet
+ * clips the box to whole lines and shows the summary only while the clip
+ * hides text.
+ */
+function renderBodyBox(body: HTMLElement) {
+  return el(
+    'div',
+    { 'data-body-box': '' },
+    body,
+    el(
+      'details',
+      { 'data-show-more': '' },
+      el(
+        'summary',
+        {},
+        el('span', { 'data-more': '' }, 'Show more'),
+        el('span', { 'data-less': '' }, 'Show less'),
+      ),
+    ),
+  )
+}
+
 export function renderPost(post: XPost, protocols: readonly string[] | null = null) {
   const reply = post.replyTo
   const replyUrl =
@@ -66,7 +89,7 @@ export function renderPost(post: XPost, protocols: readonly string[] | null = nu
     reply
       ? el('div', { 'data-reply-to': '' }, renderLink(`Replying to @${reply.handle}`, replyUrl))
       : undefined,
-    renderBody(post),
+    post.body.length > 0 ? renderBodyBox(renderBody(post)) : renderBody(post),
     renderMedia(post.media, protocols, getPermalink(post)),
     post.quote ? renderQuoted(post.quote, protocols) : undefined,
     renderEdit(post),

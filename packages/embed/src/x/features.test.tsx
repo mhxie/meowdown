@@ -203,3 +203,82 @@ describe('Full post snapshots', () => {
     })
   })
 })
+
+// Clamping needs scroll-driven animations and anchor positioning; without
+// them the card shows the whole post.
+const clampSupported =
+  CSS.supports('animation-timeline: scroll()') && CSS.supports('anchor-name: --a')
+
+// Vitest's `toBeVisible` misreads text inside a `<summary>` on WebKit, so ask
+// the browser directly.
+function isShown(element: Element): boolean {
+  return element.checkVisibility() && element.getBoundingClientRect().height > 0
+}
+
+describe('Long post bodies', () => {
+  const longText = Array.from({ length: 20 }, (_, index) => `Line ${index + 1}`).join('\n')
+
+  function mountLong() {
+    const element = mount(createPost(longText))
+    return {
+      element,
+      box: element.querySelector<HTMLElement>('[data-body-box]')!,
+      details: element.querySelector<HTMLDetailsElement>('[data-show-more]')!,
+      more: element.querySelector<HTMLElement>('[data-more]')!,
+      less: element.querySelector<HTMLElement>('[data-less]')!,
+    }
+  }
+
+  it.runIf(clampSupported)('clamps a long body until Show more is clicked', async () => {
+    const { box, details, more, less } = mountLong()
+    await expect.poll(() => isShown(more)).toBe(true)
+    expect(box.scrollHeight).toBeGreaterThan(box.clientHeight)
+    await post.getByText('Show more').click()
+    expect(details.open).toBe(true)
+    await expect.poll(() => isShown(less)).toBe(true)
+    expect(box.scrollHeight).toBe(box.clientHeight)
+    await post.getByText('Show less').click()
+    expect(details.open).toBe(false)
+    await expect.poll(() => isShown(more)).toBe(true)
+    expect(box.scrollHeight).toBeGreaterThan(box.clientHeight)
+  })
+
+  it.runIf(clampSupported)('places Show more below the clamped text', async () => {
+    const { box, details, more } = mountLong()
+    await expect.poll(() => isShown(more)).toBe(true)
+    expect(details.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      box.getBoundingClientRect().bottom,
+    )
+  })
+
+  it('shows no Show more when the whole body fits', async () => {
+    const element = mount(createPost('A short post'))
+    await expect.element(post.getByText('A short post')).toBeVisible()
+    // Let the scroll timeline settle.
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    expect(isShown(element.querySelector('[data-more]')!)).toBe(false)
+  })
+
+  it.runIf(!clampSupported)('shows the whole body without clamp support', async () => {
+    const { box, more } = mountLong()
+    await expect.element(post.getByText(/Line 20/)).toBeVisible()
+    expect(box.scrollHeight).toBe(box.clientHeight)
+    expect(isShown(more)).toBe(false)
+  })
+
+  it.runIf(clampSupported)('keeps Show less in view while the expanded post scrolls', async () => {
+    const scroller = document.createElement('div')
+    scroller.style.cssText = 'height: 240px; overflow: auto'
+    const { element, details } = mountLong()
+    scroller.append(element)
+    document.body.append(scroller)
+    await post.getByText('Show more').click()
+    scroller.scrollTop = 0
+    await vi.waitFor(() => {
+      expect(details.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        scroller.getBoundingClientRect().bottom,
+      )
+    })
+  })
+})

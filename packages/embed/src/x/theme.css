@@ -33,6 +33,24 @@
   inherits: true;
 }
 
+@property --meowdown-embed-max-lines {
+  syntax: '*';
+  inherits: true;
+}
+
+@property --_body-clamped {
+  syntax: '<integer>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes meowdown-embed-body-clamped {
+  from,
+  to {
+    --_body-clamped: 1;
+  }
+}
+
 /*
  * Hard reset. `all: revert` rolls every property on every box inside the card
  * back to the user-agent default, so a host rule on `p`, `a`, `img`,
@@ -202,6 +220,98 @@
   }
   & [data-text] {
     white-space: pre-wrap;
+  }
+
+  /* Long posts. The box around the main body clips it to whole lines. It is
+   * a scroll container whose scroll timeline is active only while the clip
+   * hides text, so the animation on that timeline sets `--_body-clamped`
+   * exactly when the disclosure is needed. The disclosure is anchored below
+   * the box, outside its clip, and opening it lifts the clip. Browsers
+   * without these features show the whole post. */
+  & [data-body-box] {
+    display: block;
+    margin-block-start: 0.75rem;
+    line-height: 1.5;
+  }
+  & [data-reply-to] + [data-body-box] {
+    margin-block-start: 0.375rem;
+  }
+  & [data-body-box] > [data-body] {
+    margin: 0;
+  }
+  & [data-show-more] {
+    display: none;
+    width: fit-content;
+    font-size: 0.9375em;
+  }
+  & [data-show-more] > summary {
+    display: block;
+    color: var(--_link);
+    list-style: none;
+    cursor: pointer;
+  }
+  & [data-show-more] > summary::-webkit-details-marker {
+    display: none;
+  }
+  & [data-show-more] > summary:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+  & [data-show-more] > summary:focus-visible {
+    outline: 2px solid var(--_link);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  & [data-show-more][open] [data-more],
+  & [data-show-more]:not([open]) [data-less] {
+    display: none;
+  }
+  @supports (animation-timeline: scroll()) and (anchor-name: --a) {
+    & > article {
+      anchor-scope: --meowdown-embed-body;
+    }
+    & [data-body-box]:not(:has(> [data-show-more][open])) {
+      max-height: calc(var(--meowdown-embed-max-lines, 10) * 1lh);
+      overflow: hidden;
+      anchor-name: --meowdown-embed-body;
+      animation: meowdown-embed-body-clamped linear both;
+      animation-timeline: scroll(self);
+      margin-block-end: calc(var(--_body-clamped) * 1.75rem);
+    }
+    & [data-show-more]:not([open]) {
+      position: absolute;
+      position-anchor: --meowdown-embed-body;
+      top: anchor(bottom);
+      inset-inline-start: anchor(start);
+      margin-block-start: 0.25rem;
+    }
+    @container style(--_body-clamped: 1) {
+      & [data-show-more] {
+        display: block;
+      }
+    }
+    /* Open, "Show less" sticks to the bottom of the scrollport until the
+     * body's end scrolls into view. */
+    & [data-show-more][open] {
+      display: block;
+      position: sticky;
+      bottom: 0.75rem;
+      z-index: 1;
+      margin: 0.5rem auto 0;
+    }
+    & [data-show-more][open] > summary {
+      padding: 0.375rem 0.875rem;
+      border: 1px solid var(--_hairline);
+      border-radius: 999px;
+      background: var(--meowdown-embed-background, Canvas);
+      box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+      font-size: 0.9333em;
+      font-weight: 500;
+    }
+    & [data-show-more][open] > summary:hover {
+      text-decoration: none;
+      background: color-mix(in srgb, var(--_link) 8%, var(--meowdown-embed-background, Canvas));
+    }
   }
 
   /* Media */
