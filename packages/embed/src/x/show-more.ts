@@ -1,19 +1,11 @@
-/**
- * Show the "Show more" button while the line clamp hides part of the main
- * body, and toggle the clamp when it is clicked. Returns the cleanup.
- */
-export function setupShowMore(container: HTMLElement): (() => void) | undefined {
-  const article = container.querySelector<HTMLElement>(':scope > article')
-  const body = article?.querySelector<HTMLElement>(':scope > [data-body]')
-  const button = article?.querySelector<HTMLButtonElement>(':scope > [data-show-more]')
-  if (!article || !body || !button) return
+import el from 'crelt'
 
-  const observer = new ResizeObserver(() => {
-    if (article.hasAttribute('data-expanded')) return
-    button.hidden = body.scrollHeight <= body.clientHeight
-  })
-  observer.observe(body)
-
+function renderShowMore(article: HTMLElement): HTMLButtonElement {
+  const button = el(
+    'button',
+    { type: 'button', 'data-show-more': '', 'aria-expanded': 'false' },
+    'Show more',
+  )
   button.addEventListener('click', () => {
     const expanded = !article.hasAttribute('data-expanded')
     article.toggleAttribute('data-expanded', expanded)
@@ -23,6 +15,30 @@ export function setupShowMore(container: HTMLElement): (() => void) | undefined 
     // once the body shrinks back.
     if (!expanded) button.scrollIntoView({ block: 'nearest' })
   })
+  return button
+}
 
+/**
+ * Add a "Show more" button while the line clamp hides part of the main body,
+ * and remove it once the whole body fits. Returns the cleanup.
+ */
+export function setupShowMore(container: HTMLElement): (() => void) | undefined {
+  const article = container.querySelector<HTMLElement>(':scope > article:not([data-fallback])')
+  const body = article?.querySelector<HTMLElement>(':scope > [data-body]')
+  if (!article || !body) return
+
+  let button: HTMLButtonElement | undefined
+  const observer = new ResizeObserver(() => {
+    if (article.hasAttribute('data-expanded')) return
+    const clamped = body.scrollHeight > body.clientHeight
+    if (clamped && !button) {
+      button = renderShowMore(article)
+      body.after(button)
+    } else if (!clamped && button) {
+      button.remove()
+      button = undefined
+    }
+  })
+  observer.observe(body)
   return () => observer.disconnect()
 }

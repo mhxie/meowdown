@@ -222,13 +222,13 @@ describe('Long post bodies', () => {
     expect(body.scrollHeight).toBeGreaterThan(body.clientHeight)
   })
 
-  it('keeps Show more hidden when the whole body fits', async () => {
-    const element = mount(createPost('Line 1\nLine 2'))
-    await expect.element(post.getByText('Line 2')).toBeVisible()
+  it('adds no Show more when the whole body fits', async () => {
+    const element = mount(createPost('A short post'))
+    await expect.element(post.getByText('A short post')).toBeVisible()
     // Let the resize observer report the body's first size.
     await new Promise((resolve) => requestAnimationFrame(resolve))
     await new Promise((resolve) => requestAnimationFrame(resolve))
-    expect(element.querySelector<HTMLButtonElement>('[data-show-more]')!.hidden).toBe(true)
+    expect(element.querySelector('[data-show-more]')).toBeNull()
   })
 
   it('keeps Show less in view while the expanded post scrolls', async () => {

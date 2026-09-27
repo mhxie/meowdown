@@ -53,15 +53,6 @@ function renderQuoted(post: XPostBase, protocols: readonly string[] | null) {
   )
 }
 
-// Hidden until `setupShowMore` finds the body clamped.
-function renderShowMore() {
-  return el(
-    'button',
-    { type: 'button', 'data-show-more': '', 'aria-expanded': 'false', hidden: true },
-    'Show more',
-  )
-}
-
 export function renderPost(post: XPost, protocols: readonly string[] | null = null) {
   const reply = post.replyTo
   const replyUrl =
@@ -76,7 +67,6 @@ export function renderPost(post: XPost, protocols: readonly string[] | null = nu
       ? el('div', { 'data-reply-to': '' }, renderLink(`Replying to @${reply.handle}`, replyUrl))
       : undefined,
     renderBody(post),
-    renderShowMore(),
     renderMedia(post.media, protocols, getPermalink(post)),
     post.quote ? renderQuoted(post.quote, protocols) : undefined,
     renderEdit(post),
