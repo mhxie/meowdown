@@ -182,3 +182,22 @@ it('replaces and inserts a same-line nested task without duplicating its parent'
 it('refuses insertion into an unclosed fence', () => {
   expect(() => planTaskInsertion('```\ncode')).toThrow('does not create a task')
 })
+
+it.each([
+  ['#my_tag', '#my_tag'],
+  ['first\n#my_tag', 'first\n#my_tag'],
+  ['first\n**bold** and *italic*', 'first\n**bold** and *italic*'],
+  ['first\n\nsecond\n', 'first\nsecond'],
+  ['\nfirst\n', 'first'],
+])('accepts paragraph input %s without unnecessary escaping', (input, expected) => {
+  const task = scanTaskItems(source)[0]!
+  const next = applySourceEdits(
+    source,
+    planTaskSourceEdits(source, task, {
+      kind: 'replaceFirstParagraph',
+      firstParagraphMarkdown: input,
+    }),
+  )
+  expect(scanTaskItems(next)[0]?.firstParagraphMarkdown).toBe(expected)
+  expect(next.endsWith('\n\n  Detail\n')).toBe(true)
+})

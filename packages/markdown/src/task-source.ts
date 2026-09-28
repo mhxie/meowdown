@@ -239,27 +239,24 @@ export function planTaskSourceEdits(
     .includes('\r\n')
     ? '\r\n'
     : '\n'
-  const content = mutation.firstParagraphMarkdown.replaceAll(/\r\n?/g, '\n')
-  if (/\n[ \t]*\n/.test(content)) throw new Error('Task content must be one paragraph')
+  // Pasted blocks become soft lines. Empty boundary lines are not paragraph content.
+  const content = mutation.firstParagraphMarkdown
+    .replaceAll(/\r\n?/g, '\n')
+    .replaceAll(/\n[ \t]*\n+/g, '\n')
+    .replace(/^\n+|\n+$/g, '')
   const lines = content.split('\n').map((line, index) => {
     if (index === 0) return line
     const probe = 'text\n' + line
     const block = gfmParser.parse(probe).topNode.firstChild
     if (block?.name === 'Paragraph' && block.to === probe.length && !block.nextSibling) return line
-    return (
-      line
-        // FIXME 这里是否会过于严格？比如说如果我的 task 的内容以一个 #my_tag 开头，这里似乎会被转义掉，导致内容不符合预期。我们可以考虑把整个 planTaskSourceEdits 的逻辑都变得宽松一些，请深入思考还有哪些场景可能出问题。注意我们不需要保证100%的markdown 语法兼容性和正确性。
-        .replace(/^(\s*)([#>+*<`~=-])/, String.raw`$1\$2`)
-        .replace(/^(\s*\d+)([.)])(?=\s)/, String.raw`$1\$2`)
-    )
+    // Only escape a continuation that actually opens a block. Ordinary hashtags
+    // and inline marks already returned above, preserving their source spelling.
+    return line
+      .replace(/^(\s*)([#>+*<`~=-])/, String.raw`$1\$2`)
+      .replace(/^(\s*\d+)([.)])(?=\s)/, String.raw`$1\$2`)
   })
   const replacement = lines.join(newline + task.continuationPrefix)
-  const edits = edit({ from: task.marker.to, to: task.firstParagraph.to }, ' ' + replacement)
-  const next = applySourceEdits(source, edits)
-  const parsed = scanTaskItems(next).find((item) => item.marker.from === task.marker.from)
-  if (!parsed || parsed.firstParagraph.to !== task.marker.to + 1 + replacement.length)
-    throw new Error('Task content must remain a single paragraph')
-  return edits
+  return edit({ from: task.marker.to, to: task.firstParagraph.to }, ' ' + replacement)
 }
 
 /**
