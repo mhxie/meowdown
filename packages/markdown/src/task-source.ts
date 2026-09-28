@@ -246,9 +246,12 @@ export function planTaskSourceEdits(
     const probe = 'text\n' + line
     const block = gfmParser.parse(probe).topNode.firstChild
     if (block?.name === 'Paragraph' && block.to === probe.length && !block.nextSibling) return line
-    return line
-      .replace(/^(\s*)([#>+*<`~=-])/, String.raw`$1\$2`)
-      .replace(/^(\s*\d+)([.)])(?=\s)/, String.raw`$1\$2`)
+    return (
+      line
+        // FIXME 这里是否会过于严格？比如说如果我的 task 的内容以一个 #my_tag 开头，这里似乎会被转义掉，导致内容不符合预期。我们可以考虑把整个 planTaskSourceEdits 的逻辑都变得宽松一些，请深入思考还有哪些场景可能出问题。注意我们不需要保证100%的markdown 语法兼容性和正确性。
+        .replace(/^(\s*)([#>+*<`~=-])/, String.raw`$1\$2`)
+        .replace(/^(\s*\d+)([.)])(?=\s)/, String.raw`$1\$2`)
+    )
   })
   const replacement = lines.join(newline + task.continuationPrefix)
   const edits = edit({ from: task.marker.to, to: task.firstParagraph.to }, ' ' + replacement)
