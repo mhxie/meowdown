@@ -9,26 +9,23 @@ export { isSpaceChar } from './unicode.ts'
 export type { SyntaxNode, Tree, TreeCursor } from '@lezer/common'
 export type { MarkdownParser } from './parser.ts'
 
-export {
-  readBlockSource,
-  dedentContinuation,
-  measureContentColumn,
-  sliceColumn,
-  readLeafText,
-} from './leaf-text.ts'
-export {
-  scanTaskItems,
-  readTaskFirstParagraph,
-  readTaskMarker,
-  planTaskSourceEdits,
-  applySourceEdits,
-  planTaskInsertion,
-  type SourceRange,
-  type SourceEdit,
-  type TaskSourceItem,
-  type TaskSourceMutation,
-  type TaskInsertionTarget,
-  type TaskInsertionOptions,
-} from './task-source.ts'
-
-export { getLezerNodeChild } from './node-child.ts'
+export { parseMarkdownAst, type ParseMarkdownAstOptions } from './ast/parse.ts'
+export { serializeMarkdownAst, type SerializeMarkdownAstOptions } from './ast/serialize.ts'
+export type {
+  MarkdownDocument,
+  MarkdownInline,
+  MarkdownParagraph,
+  MarkdownHeading,
+  MarkdownBlockquote,
+  MarkdownListItem,
+  MarkdownCodeBlock,
+  MarkdownHorizontalRule,
+  MarkdownHTMLComment,
+  MarkdownTable,
+  MarkdownTableRow,
+  MarkdownTableCell,
+  MarkdownIgnored,
+  MarkdownText,
+  MarkdownBlock,
+  MarkdownNode,
+} from './ast/types.ts'
