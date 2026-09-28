@@ -1,6 +1,4 @@
 // Alphabet chars.
-export const CHAR_LOWERCASE_X = 120 /* x */
-export const CHAR_UPPERCASE_X = 88 /* X */
 
 // Non-alphabetic chars.
 export const CHAR_DOT = 46 /* . */
