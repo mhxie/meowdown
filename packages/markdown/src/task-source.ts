@@ -18,18 +18,65 @@ export interface SourceEdit {
   readonly insert: string
 }
 
-// FIXME please use JSDoc to describe the properties of TaskSourceItem. Use you can add a single JSDoc to TaskSourceItem, with an example to illustrate what each property means.
+/**
+ * One parsed checkbox item. All ranges are half-open UTF-16 offsets into the
+ * exact source passed to `scanTaskItems`; they are not stable task identifiers.
+ *
+ * @example
+ * For `"+ [ ] first\n  second\n\n  detail"`, `marker` selects `[ ]`,
+ * `firstParagraph` selects `[ ] first\n  second`, and `item` includes `detail`.
+ * `firstParagraphRemoval` additionally includes the leading `+ ` and the first
+ * paragraph's ending newline, but leaves the blank line and detail unchanged.
+ * `firstParagraphMarkdown` is `"first\nsecond"`; `contentFrom` points at `f`.
+ * `continuationPrefix` is `"  "` and `siblingPrefix` is `"+ "`.
+ */
 export interface TaskSourceItem {
+  /**
+   * Exactly the three checkbox characters, excluding the list bullet.
+   */
   readonly marker: SourceRange
+  /**
+   * Original checkbox spelling; preserves uppercase `[X]` on unrelated edits.
+   */
   readonly markerText: '[ ]' | '[x]' | '[X]'
+  /**
+   * Original list marker, such as `+`, `-`, `*`, or `1.`.
+   */
   readonly bullet: string
+  /**
+   * Whether the checkbox contains `x` or `X`.
+   */
   readonly checked: boolean
+  /**
+   * Task paragraph including its checkbox and source continuation prefixes,
+   * excluding the ending newline and subsequent blocks.
+   */
   readonly firstParagraph: SourceRange
+  /**
+   * Physical lines removed when deleting only the first paragraph, including
+   * its first-line container prefix and ending LF/CRLF when present.
+   */
   readonly firstParagraphRemoval: SourceRange
+  /**
+   * Complete list item, including later paragraphs, blocks, and nested items.
+   */
   readonly item: SourceRange
+  /**
+   * Editable inline Markdown with checkbox/container prefixes removed and
+   * CRLF normalized to LF; inline marks and hard-break syntax remain intact.
+   */
   readonly firstParagraphMarkdown: string
+  /**
+   * Source offset after the checkbox and its optional single space or tab.
+   */
   readonly contentFrom: number
+  /**
+   * Quote/list indentation prepended to each serialized continuation line.
+   */
   readonly continuationPrefix: string
+  /**
+   * Container prefix plus list bullet and spacing for an inserted sibling.
+   */
   readonly siblingPrefix: string
 }
 
