@@ -8,6 +8,7 @@ import { gfmParser } from './parser.ts'
  * Half-open UTF-16 offsets in the supplied source string.
  */
 export interface SourceRange {
+  // FIXME: based on your plan doc, you should add some jsdoc for interfaces/props in this file. Ensure you describe what each property represents and how it should be used with examples.
   readonly from: number
   readonly to: number
 }
