@@ -261,6 +261,7 @@ export function planTaskSourceEdits(
 
 /**
  * Insert an empty sibling after an item, or a top-level task at the end.
+ * FIXME: 请重新设计这里的 API，因为我们希望未来能够支持 https://github.com/team-reflect/reflect-open/pull/1256 这种场景
  */
 export function planTaskInsertion(source: string, after?: TaskSourceItem): SourceEdit {
   const offset = after?.item.to ?? source.length
