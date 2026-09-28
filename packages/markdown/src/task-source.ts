@@ -54,6 +54,7 @@ export function readTaskMarker(
  * Read a Task node with its list item's continuation column.
  */
 export function readTaskFirstParagraph(source: string, node: SyntaxNode, column: number): string {
+  // FIXME: 出于类型安全的考虑，请不要直接使用 node.getChild。请创建一个小工具函数，叫做 getLezerNodeChild(node, type) 。这个函数不像node.getChild 一样接受任何类型的 string 作为 type，它只接受符合 LezerNodeName 类型的字符串。这样可以避免在运行时出现类型错误。注意之前有些地方已经使用了 node.getChild 的写法，这次请统一改成 getLezerNodeChild(node, type) 的写法。
   const marker = node.getChild('TaskMarker')
   if (!marker) throw new Error('Expected a task marker')
   let from = marker.to
