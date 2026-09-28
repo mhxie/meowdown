@@ -243,7 +243,7 @@ export function planTaskSourceEdits(
   const content = mutation.firstParagraphMarkdown
     .replaceAll(/\r\n?/g, '\n')
     .replaceAll(/\n[ \t]*\n+/g, '\n')
-    .replace(/^\n+|\n+$/g, '')
+    .replaceAll(/^\n+|\n+$/g, '')
   const lines = content.split('\n').map((line, index) => {
     if (index === 0) return line
     const probe = 'text\n' + line

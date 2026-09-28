@@ -190,7 +190,7 @@ it.each([
   ['first\n\nsecond\n', 'first\nsecond'],
   ['\nfirst\n', 'first'],
 ])('accepts paragraph input %s without unnecessary escaping', (input, expected) => {
-  const task = scanTaskItems(source)[0]!
+  const task = scanTaskItems(source)[0]
   const next = applySourceEdits(
     source,
     planTaskSourceEdits(source, task, {
