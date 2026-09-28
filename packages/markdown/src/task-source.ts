@@ -5,17 +5,43 @@ import { getLezerNodeChild } from './node-child.ts'
 import { gfmParser } from './parser.ts'
 
 /**
- * Half-open UTF-16 offsets in the supplied source string.
+ * A half-open range in one immutable source string: `source.slice(from, to)`.
+ * Coordinates count UTF-16 code units, like JavaScript string indices, not
+ * bytes, Unicode code points, line numbers, or stable task IDs. Re-scan or map
+ * ranges after changing the source; never reuse them against an unrelated edit.
+ *
+ * @example
+ * // The emoji occupies two UTF-16 code units.
+ * const source = '😀 [ ]'
+ * const marker: SourceRange = { from: 3, to: 6 }
+ * source.slice(marker.from, marker.to) // '[ ]'
  */
 export interface SourceRange {
-  // FIXME: based on your plan doc, you should add some jsdoc for interfaces/props in this file. Ensure you describe what each property represents and how it should be used with examples.
+  /** Inclusive start, between 0 and the source string's length. */
   readonly from: number
+  /** Exclusive end, at least `from`; equal endpoints represent an insertion. */
   readonly to: number
 }
 
+/**
+ * Replace a range only while its source text matches the captured expectation.
+ * Pass patches from the same source snapshot together to `applySourceEdits`;
+ * callers must separately ensure that snapshot is still the intended revision.
+ * The expected text guards a patch, not the identity of the surrounding task.
+ *
+ * @example
+ * const edit: SourceEdit = {
+ *   range: { from: 2, to: 5 }, expected: '[ ]', insert: '[x]',
+ * }
+ * applySourceEdits('+ [ ] milk', [edit]) // '+ [x] milk'
+ * // Insert: use equal endpoints and expected: ''. Delete: use insert: ''.
+ */
 export interface SourceEdit {
+  /** Range in the original source, before any other patch has been applied. */
   readonly range: SourceRange
+  /** Exact original `source.slice(range.from, range.to)`; a mismatch throws. */
   readonly expected: string
+  /** Replacement source, including any Markdown syntax and physical newlines. */
   readonly insert: string
 }
 
@@ -81,12 +107,60 @@ export interface TaskSourceItem {
   readonly siblingPrefix: string
 }
 
+/**
+ * A source operation on one scanned task. Later item blocks remain unchanged.
+ * These requests describe intent; `planTaskSourceEdits` serializes them into
+ * patches, and `applySourceEdits` applies those patches to the original source.
+ *
+ * @example
+ * const task = scanTaskItems(source)[0]
+ * if (task) {
+ *   const edits = planTaskSourceEdits(source, task, {
+ *     kind: 'replaceFirstParagraph', firstParagraphMarkdown: 'Buy **milk**',
+ *   })
+ *   const updated = applySourceEdits(source, edits)
+ * }
+ */
 export type TaskSourceMutation =
-  | { readonly kind: 'setChecked'; readonly value: boolean }
-  | { readonly kind: 'replaceFirstParagraph'; readonly firstParagraphMarkdown: string }
-  | { readonly kind: 'removeFirstParagraph' }
-  | { readonly kind: 'toBullet'; readonly firstParagraphMarkdown?: string }
+  | {
+      /** Set a checkbox explicitly; retrying does not toggle it back. */
+      readonly kind: 'setChecked'
+      /** Desired state; an already uppercase `[X]` remains uppercase when true. */
+      readonly value: boolean
+    }
+  | {
+      /** Replace the editable paragraph while retaining the checkbox. */
+      readonly kind: 'replaceFirstParagraph'
+      /**
+       * Inline Markdown without bullet/checkbox/container prefixes. LF denotes
+       * soft lines; blank pasted lines collapse and boundary newlines are removed.
+       * For example, `"Buy **milk**\nfor lunch"` remains one task paragraph.
+       */
+      readonly firstParagraphMarkdown: string
+    }
+  | {
+      /** Delete `firstParagraphRemoval`, leaving all later item blocks intact. */
+      readonly kind: 'removeFirstParagraph'
+    }
+  | {
+      /** Remove the checkbox, retaining an ordinary paragraph list item. */
+      readonly kind: 'toBullet'
+      /**
+       * Optional simultaneous paragraph edit; omitted means retain the current
+       * paragraph. Block-opening syntax is escaped so `"[ ] literal"` cannot
+       * accidentally create another task after the checkbox is removed.
+       */
+      readonly firstParagraphMarkdown?: string
+    }
 
+/**
+ * Recognize an exact three-character checkbox, without bullet or whitespace.
+ * Returns its checked state, original `x`/`X` character (undefined if unchecked),
+ * and exact marker text; returns undefined for other strings.
+ *
+ * @example
+ * readTaskMarker('[X]') // { checked: true, character: 'X', text: '[X]' }
+ */
 export function readTaskMarker(
   text: string,
 ):
@@ -117,6 +191,9 @@ export function readTaskFirstParagraph(source: string, node: SyntaxNode, column:
 
 /**
  * Scan real task nodes, including tasks nested in quotes and lists.
+ * An optional tree must have been parsed from exactly `source`; callers may
+ * share their existing parse. Fenced code and ordinary unchecked lists are not
+ * tasks. Application filters (for example only `+` bullets) belong to callers.
  */
 export function scanTaskItems(
   source: string,
@@ -274,26 +351,50 @@ export function planTaskSourceEdits(
  * caller's policy; this layer only writes list syntax at the chosen location.
  */
 export type TaskInsertionTarget =
-  | { readonly kind: 'afterItem'; readonly item: TaskSourceItem }
   | {
+      /** Insert after the complete item, including its detail blocks. */
+      readonly kind: 'afterItem'
+      /** Item scanned from the same source; supplies `item.to` and `siblingPrefix`. */
+      readonly item: TaskSourceItem
+    }
+  | {
+      /** Insert at a caller-chosen source boundary, such as the end of a heading. */
       readonly kind: 'position'
+      /**
+       * UTF-16 position in the unchanged source. Choose a block boundary, not
+       * the middle of a paragraph; insertion throws if it cannot create a task.
+       */
       readonly offset: number
       /**
        * Container prefix and bullet, for example `"+ "` or `">   - "`.
+       * Defaults to `"+ "`; must not contain physical newlines.
        */
       readonly prefix?: string
       /**
        * Separate a newly started list from surrounding prose with blank lines.
+       * Defaults to false. Use true below a heading or between separate blocks.
        */
       readonly separate?: boolean
     }
 
+/**
+ * Initial content and placement of one new task. Defaults create an empty,
+ * unchecked, top-level `+ [ ]` task at the end of the source.
+ *
+ * @example
+ * const edit = planTaskInsertion(source, {
+ *   firstParagraphMarkdown: 'Review **patch**', checked: false,
+ * })
+ * const updated = applySourceEdits(source, [edit])
+ */
 export interface TaskInsertionOptions {
   /**
    * Defaults to a top-level round task at the end of the supplied source.
    */
   readonly target?: TaskInsertionTarget
+  /** Inline Markdown without checkbox/container prefixes; defaults to empty. */
   readonly firstParagraphMarkdown?: string
+  /** Initial checkbox state; defaults to false, true writes lowercase `[x]`. */
   readonly checked?: boolean
 }
 
