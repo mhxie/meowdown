@@ -9,7 +9,13 @@ export { isSpaceChar } from './unicode.ts'
 export type { SyntaxNode, Tree, TreeCursor } from '@lezer/common'
 export type { MarkdownParser } from './parser.ts'
 
-export { dedentContinuation, measureContentColumn, sliceColumn, readLeafText } from './leaf-text.ts'
+export {
+  readBlockSource,
+  dedentContinuation,
+  measureContentColumn,
+  sliceColumn,
+  readLeafText,
+} from './leaf-text.ts'
 export {
   scanTaskItems,
   readTaskFirstParagraph,

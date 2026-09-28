@@ -226,6 +226,7 @@ export interface MarkdownViewProps {
  * block's `memo` comparator can test it by identity.
  */
 interface BlockContext {
+  inline: boolean
   interactive: boolean
   expandCollapsed: boolean
   resolveImageUrl?: ImageUrlResolver
@@ -852,7 +853,7 @@ function renderBlock(
   parent: ProseMirrorNode | null,
   index: number,
 ): ReactNode {
-  if (isReferenceDefinitionNode(node, parent, index)) return null
+  if (!context.inline && isReferenceDefinitionNode(node, parent, index)) return null
 
   const key = context.keyCounter.value++
   const typeName = node.type.name as NodeName
@@ -1026,6 +1027,7 @@ export function MarkdownView({
 }: MarkdownViewProps): ReactElement {
   const context = useMemo<BlockContext>(
     () => ({
+      inline,
       interactive,
       expandCollapsed,
       resolveImageUrl,
@@ -1043,6 +1045,7 @@ export function MarkdownView({
       onTaskClick: interactive ? onTaskClick : undefined,
     }),
     [
+      inline,
       interactive,
       expandCollapsed,
       resolveImageUrl,
@@ -1063,7 +1066,8 @@ export function MarkdownView({
 
   const { blocks, referenceDefinitions, definitionsKey } = useMemo(() => {
     const doc = inline ? paragraphMarkdownToDoc(markdown) : markdownToDoc(markdown, { frontmatter })
-    const referenceDefinitions = suppliedDefinitions ?? collectReferenceDefinitions(doc).definitions
+    const referenceDefinitions =
+      suppliedDefinitions ?? (inline ? new Map() : collectReferenceDefinitions(doc).definitions)
     return {
       blocks: splitBlocks(doc),
       referenceDefinitions,

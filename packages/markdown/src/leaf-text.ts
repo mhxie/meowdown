@@ -1,4 +1,4 @@
-import type { TreeCursor } from '@lezer/common'
+import type { SyntaxNode, TreeCursor } from '@lezer/common'
 
 import { LEZER_NODE_IDS } from './node-ids.ts'
 import { CHAR_TAB, CHAR_SPACE, CHAR_LINE_FEED } from './unicode.ts'
@@ -135,4 +135,20 @@ function trimTrailingBlankLines(content: string): string {
     else if (code !== CHAR_SPACE && code !== CHAR_TAB) break
   }
   return content.slice(0, end)
+}
+
+/**
+ * Read a leaf block independently of its surrounding list and quote prefixes.
+ */
+export function readBlockSource(source: string, node: SyntaxNode): string {
+  const lineStart = source.lastIndexOf('\n', node.from - 1) + 1
+  const prefix = source.slice(lineStart, node.from)
+  const quoteEnd = prefix.lastIndexOf('>')
+  const indentation = quoteEnd < 0 ? prefix : prefix.slice(quoteEnd + 1).replace(/^ /, '')
+  return dedentContinuation(
+    readLeafText(node.cursor(), source, node.from, node.to)
+      .replaceAll('\r\n', '\n')
+      .replace(/\r$/, ''),
+    measureContentColumn(indentation, indentation.length),
+  )
 }

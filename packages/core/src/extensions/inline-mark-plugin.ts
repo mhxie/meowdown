@@ -35,6 +35,7 @@ import {
   type ReferenceDefinitions,
 } from './reference-links.ts'
 import { getMarkBuildersForSchema } from './schema.ts'
+import { singleParagraphPluginKey } from './single-paragraph.ts'
 
 const META_KEY = 'inline-marks-applied'
 const TRIGGER_KEY = 'inline-marks-trigger'
@@ -226,7 +227,7 @@ function createInlineMarkPlugin(
         options,
         references,
         changedKeys,
-        isReferenceDefinitionNode(node, parent, index),
+        !singleParagraphPluginKey.get(state) && isReferenceDefinitionNode(node, parent, index),
       )
       if (nodeChunks.length > 0) chunks.push(...nodeChunks)
       const updated = chunkCache.get(node)
@@ -255,8 +256,11 @@ function createInlineMarkPlugin(
   function collectReferences(
     doc: EditorNode,
     external: ReferenceDefinitions | undefined,
+    state: EditorState,
   ): ReferenceDefinitionIndex {
-    const local = collectReferenceDefinitions(doc)
+    const local = singleParagraphPluginKey.get(state)
+      ? { nodes: new Set<EditorNode>(), definitions: new Map() }
+      : collectReferenceDefinitions(doc)
     return external
       ? { nodes: local.nodes, definitions: new Map([...external, ...local.definitions]) }
       : local
@@ -268,7 +272,11 @@ function createInlineMarkPlugin(
       init(_config, state) {
         return {
           externalDefinitions: getOptions?.(state)?.referenceDefinitions,
-          references: collectReferences(state.doc, getOptions?.(state)?.referenceDefinitions),
+          references: collectReferences(
+            state.doc,
+            getOptions?.(state)?.referenceDefinitions,
+            state,
+          ),
           pendingReferenceKeys: emptyReferenceKeys,
         }
       },
@@ -281,9 +289,10 @@ function createInlineMarkPlugin(
         if (transaction.getMeta(META_KEY)) return value
         const externalDefinitions = getOptions?.(oldState)?.referenceDefinitions
         const references =
+          singleParagraphPluginKey.get(oldState) ||
           externalDefinitions !== value.externalDefinitions ||
           (externalDefinitions && transaction.docChanged)
-            ? collectReferences(newState.doc, externalDefinitions)
+            ? collectReferences(newState.doc, externalDefinitions, newState)
             : updateReferenceDefinitions(value.references, transaction, newState.doc)
         if (references === value.references) return value
         const changedKeys = getChangedReferenceKeys(

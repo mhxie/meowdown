@@ -46,3 +46,17 @@ it('updates external reference definitions without changing paragraph content', 
   await expect.element(link).toHaveAttribute('href', 'https://example.com/new')
   expect(fixture.doc.textContent).toBe('[label][ref]')
 })
+
+it.each(['[ ] ', '[x] ', ' + ', ' - ', '1. ', '> ', '``` '])(
+  'keeps the literal prefix %s',
+  async (prefix) => {
+    using fixture = setupFixture()
+    fixture.editor.use(defineSingleParagraph())
+    fixture.set(fixture.n.doc(fixture.n.paragraph('<a>')))
+    fixture.view.focus()
+    await userEvent.type(fixture.view.dom, prefix.replaceAll('[', '[['))
+    expect(fixture.doc.childCount).toBe(1)
+    expect(fixture.doc.child(0).type.name).toBe('paragraph')
+    expect(fixture.doc.textContent).toBe(prefix)
+  },
+)

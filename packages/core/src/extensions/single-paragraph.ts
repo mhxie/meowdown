@@ -1,10 +1,12 @@
 import { definePlugin, withPriority, Priority, type PlainExtension } from '@prosekit/core'
-import { Plugin, TextSelection } from '@prosekit/pm/state'
+import { Plugin, PluginKey, TextSelection } from '@prosekit/pm/state'
 
 import { docToParagraphMarkdown, paragraphMarkdownToDoc } from '../converters/paragraph.ts'
 
 import { isNodeOfType } from './node-names.ts'
 import { getNodeBuildersForSchema } from './schema.ts'
+
+export const singleParagraphPluginKey = new PluginKey('single-paragraph')
 
 /**
  * Keep editing and pasted content within one paragraph.
@@ -13,11 +15,10 @@ export function defineSingleParagraph(): PlainExtension {
   return withPriority(
     definePlugin(
       new Plugin({
+        key: singleParagraphPluginKey,
         props: {
           handleTextInput(view, from, to, text) {
-            const paragraph = view.state.doc.resolve(from)
-            const prefix = paragraph.parent.textBetween(0, paragraph.parentOffset) + text
-            if (!/^(?:#{1,6}|[>\-+*]|\d+[.)]|`{3,}|~{3,})[ \t]/.test(prefix)) return false
+            // Raw paragraph editing must run before block input rules consume syntax.
             view.dispatch(view.state.tr.insertText(text, from, to))
             return true
           },

@@ -22,3 +22,8 @@ it('renders paragraph marks with external reference definitions', async () => {
   await expect.element(view.locate('strong')).toHaveTextContent('**first second**')
   await expect.element(view.getByRole('link')).toHaveAttribute('href', 'https://example.com')
 })
+
+it('keeps definition-looking paragraph content visible', async () => {
+  await render(<MarkdownInlineView markdown="[ref]: https://example.com" />)
+  await expect.element(page.locate('p')).toHaveTextContent('[ref]: https://example.com')
+})
