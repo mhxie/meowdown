@@ -22,3 +22,5 @@ export {
   type TaskSourceItem,
   type TaskSourceMutation,
 } from './task-source.ts'
+
+export { getLezerNodeChild } from './node-child.ts'
