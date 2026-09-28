@@ -1066,8 +1066,10 @@ export function MarkdownView({
 
   const { blocks, referenceDefinitions, definitionsKey } = useMemo(() => {
     const doc = inline ? paragraphMarkdownToDoc(markdown) : markdownToDoc(markdown, { frontmatter })
-    const referenceDefinitions =
-      suppliedDefinitions ?? (inline ? new Map() : collectReferenceDefinitions(doc).definitions)
+    const localDefinitions = inline ? new Map() : collectReferenceDefinitions(doc).definitions
+    const referenceDefinitions = suppliedDefinitions
+      ? new Map([...suppliedDefinitions, ...localDefinitions])
+      : localDefinitions
     return {
       blocks: splitBlocks(doc),
       referenceDefinitions,

@@ -1,4 +1,4 @@
-import { getLezerNodeChild, gfmParser, LEZER_NODE_IDS, type SyntaxNode } from '@meowdown/markdown'
+import { gfmParser, LEZER_NODE_IDS, type SyntaxNode } from '@meowdown/markdown'
 import type { EditorNode } from '@prosekit/pm/model'
 import type { Transaction } from '@prosekit/pm/state'
 import { AttrStep } from '@prosekit/pm/transform'
@@ -56,14 +56,14 @@ export function parseReferenceDefinition(text: string): ReferenceDefinition | un
   const reference = getReferenceNode(text)
   if (reference == null) return
 
-  const label = getLezerNodeChild(reference, 'LinkLabel')
-  const destination = getLezerNodeChild(reference, 'URL')
+  const label = reference.getChild('LinkLabel')
+  const destination = reference.getChild('URL')
   if (label == null || destination == null) return
 
   const key = normalizeReferenceLabel(text.slice(label.from + 1, label.to - 1))
   if (key === '') return
 
-  const title = getLezerNodeChild(reference, 'LinkTitle')
+  const title = reference.getChild('LinkTitle')
   return {
     key,
     href: decodeDestination(text.slice(destination.from, destination.to)),

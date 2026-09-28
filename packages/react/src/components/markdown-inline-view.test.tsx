@@ -4,7 +4,7 @@ import { expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page } from 'vitest/browser'
 
-import { MarkdownInlineView } from './markdown-view.tsx'
+import { MarkdownInlineView, MarkdownView } from './markdown-view.tsx'
 
 it('renders paragraph marks with external reference definitions', async () => {
   await render(
@@ -26,4 +26,37 @@ it('renders paragraph marks with external reference definitions', async () => {
 it('keeps definition-looking paragraph content visible', async () => {
   await render(<MarkdownInlineView markdown="[ref]: https://example.com" />)
   await expect.element(page.locate('p')).toHaveTextContent('[ref]: https://example.com')
+})
+
+it('keeps local definitions ahead of supplied context in a full document', async () => {
+  await render(
+    <MarkdownView
+      markdown={'[ref]: https://example.com/local\n\n[label][ref]'}
+      referenceDefinitions={
+        new Map([['REF', { key: 'REF', href: 'https://example.com/external', title: '' }]])
+      }
+    />,
+  )
+  await expect.element(page.getByRole('link')).toHaveAttribute('href', 'https://example.com/local')
+})
+
+it('refreshes inline links when the containing note definitions change', async () => {
+  const screen = await render(
+    <MarkdownInlineView
+      markdown="[label][ref]"
+      referenceDefinitions={
+        new Map([['REF', { key: 'REF', href: 'https://example.com/old', title: '' }]])
+      }
+    />,
+  )
+  await expect.element(page.getByRole('link')).toHaveAttribute('href', 'https://example.com/old')
+  await screen.rerender(
+    <MarkdownInlineView
+      markdown="[label][ref]"
+      referenceDefinitions={
+        new Map([['REF', { key: 'REF', href: 'https://example.com/new', title: '' }]])
+      }
+    />,
+  )
+  await expect.element(page.getByRole('link')).toHaveAttribute('href', 'https://example.com/new')
 })

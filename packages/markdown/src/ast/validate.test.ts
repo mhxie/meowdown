@@ -50,6 +50,7 @@ describe('validated serialization', () => {
     const output = serializeMarkdownAst(document, { frontmatter: true, validate: true })
     expect(output).toContain('😀 **first**\n  *second*')
     expect(output).toContain('| :-- | --: |')
+    expect(output).not.toContain('\r')
     expect(parseMarkdownAst(output, { frontmatter: true })).toEqual(document)
   })
 

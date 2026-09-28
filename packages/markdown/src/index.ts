@@ -30,7 +30,6 @@ export type {
   MarkdownNode,
 } from './ast/types.ts'
 
-export { getLezerNodeChild } from './node-child.ts'
 export {
   walkMarkdownAst,
   resolveMarkdownAstPath,
