@@ -1,4 +1,5 @@
 import type { TreeCursor } from '@lezer/common'
+
 import { LEZER_NODE_IDS } from './node-ids.ts'
 import { CHAR_TAB, CHAR_SPACE, CHAR_LINE_FEED } from './unicode.ts'
 
@@ -135,4 +136,3 @@ function trimTrailingBlankLines(content: string): string {
   }
   return content.slice(0, end)
 }
-

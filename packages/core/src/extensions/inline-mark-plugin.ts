@@ -42,6 +42,7 @@ const RESTYLE_KEY = 'inline-marks-restyle'
 const RESTYLE_DEBOUNCE_MS = 200
 
 interface InlineMarkPluginState {
+  readonly externalDefinitions: ReferenceDefinitions | undefined
   readonly references: ReferenceDefinitionIndex
   readonly pendingReferenceKeys: ReadonlySet<string>
 }
@@ -251,32 +252,53 @@ function createInlineMarkPlugin(
     }
   }
 
+  function collectReferences(
+    doc: EditorNode,
+    external: ReferenceDefinitions | undefined,
+  ): ReferenceDefinitionIndex {
+    const local = collectReferenceDefinitions(doc)
+    return external
+      ? { nodes: local.nodes, definitions: new Map([...external, ...local.definitions]) }
+      : local
+  }
+
   return new Plugin<InlineMarkPluginState>({
     key: pluginKey,
     state: {
       init(_config, state) {
         return {
-          references: collectReferenceDefinitions(state.doc),
+          externalDefinitions: getOptions?.(state)?.referenceDefinitions,
+          references: collectReferences(state.doc, getOptions?.(state)?.referenceDefinitions),
           pendingReferenceKeys: emptyReferenceKeys,
         }
       },
-      apply(transaction, value, _oldState, newState) {
+      apply(transaction, value, oldState, newState) {
         if (transaction.getMeta(RESTYLE_KEY) === true) {
           return value.pendingReferenceKeys.size === 0
             ? value
-            : { references: value.references, pendingReferenceKeys: emptyReferenceKeys }
+            : { ...value, pendingReferenceKeys: emptyReferenceKeys }
         }
         if (transaction.getMeta(META_KEY)) return value
-        const references = updateReferenceDefinitions(value.references, transaction, newState.doc)
+        const externalDefinitions = getOptions?.(oldState)?.referenceDefinitions
+        const references =
+          externalDefinitions !== value.externalDefinitions ||
+          (externalDefinitions && transaction.docChanged)
+            ? collectReferences(newState.doc, externalDefinitions)
+            : updateReferenceDefinitions(value.references, transaction, newState.doc)
         if (references === value.references) return value
         const changedKeys = getChangedReferenceKeys(
           value.references.definitions,
           references.definitions,
         )
         if (changedKeys.size === 0) {
-          return { references, pendingReferenceKeys: value.pendingReferenceKeys }
+          return {
+            externalDefinitions,
+            references,
+            pendingReferenceKeys: value.pendingReferenceKeys,
+          }
         }
         return {
+          externalDefinitions,
           references,
           pendingReferenceKeys: mergeReferenceKeys(value.pendingReferenceKeys, changedKeys),
         }

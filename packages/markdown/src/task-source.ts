@@ -3,7 +3,9 @@ import type { SyntaxNode, Tree } from '@lezer/common'
 import { dedentContinuation, measureContentColumn, readLeafText } from './leaf-text.ts'
 import { gfmParser } from './parser.ts'
 
-/** Half-open UTF-16 offsets in the supplied source string. */
+/**
+ * Half-open UTF-16 offsets in the supplied source string.
+ */
 export interface SourceRange {
   readonly from: number
   readonly to: number
@@ -26,6 +28,7 @@ export interface TaskSourceItem {
   readonly firstParagraphMarkdown: string
   readonly contentFrom: number
   readonly continuationPrefix: string
+  readonly siblingPrefix: string
 }
 
 export type TaskSourceMutation =
@@ -34,66 +37,128 @@ export type TaskSourceMutation =
   | { readonly kind: 'removeFirstParagraph' }
   | { readonly kind: 'toBullet' }
 
-export function readTaskMarker(text: string):
+export function readTaskMarker(
+  text: string,
+):
   | { checked: boolean; character: 'x' | 'X' | undefined; text: TaskSourceItem['markerText'] }
   | undefined {
   if (text !== '[ ]' && text !== '[x]' && text !== '[X]') return
-  return { checked: text !== '[ ]', character: text === '[ ]' ? undefined : text === '[X]' ? 'X' : 'x', text }
+  return {
+    checked: text !== '[ ]',
+    character: text === '[ ]' ? undefined : text === '[X]' ? 'X' : 'x',
+    text,
+  }
 }
 
-/** Read a Task node with its list item's continuation column. */
+/**
+ * Read a Task node with its list item's continuation column.
+ */
 export function readTaskFirstParagraph(source: string, node: SyntaxNode, column: number): string {
   const marker = node.getChild('TaskMarker')
   if (!marker) throw new Error('Expected a task marker')
   let from = marker.to
   if (source[from] === ' ' || source[from] === '\t') from++
-  return dedentContinuation(readLeafText(node.cursor(), source, from, node.to), column).replace(/\r\n/g, '\n')
+  const end = source[node.to - 1] === '\r' ? node.to - 1 : node.to
+  return dedentContinuation(readLeafText(node.cursor(), source, from, end), column).replaceAll(
+    '\r\n',
+    '\n',
+  )
 }
 
-/** Scan real task nodes, including tasks nested in quotes and lists. */
-export function scanTaskItems(source: string, tree: Tree = gfmParser.parse(source)): TaskSourceItem[] {
+/**
+ * Scan real task nodes, including tasks nested in quotes and lists.
+ */
+export function scanTaskItems(
+  source: string,
+  tree: Tree = gfmParser.parse(source),
+): TaskSourceItem[] {
   const tasks: TaskSourceItem[] = []
-  tree.iterate({ enter(reference) {
-    if (reference.name !== 'Task') return
-    const node = reference.node
-    const item = node.parent
-    const marker = node.getChild('TaskMarker')
-    const listMark = item?.getChild('ListMark')
-    if (!item || !marker || !listMark) return
-    const parsed = readTaskMarker(source.slice(marker.from, marker.to))
-    if (!parsed) return
-    const lineFrom = source.lastIndexOf('\n', marker.from - 1) + 1
-    const prefix = source.slice(lineFrom, marker.from)
-    const continuationPrefix = source.slice(lineFrom, listMark.from) + ' '.repeat(marker.from - listMark.from)
-    const column = measureContentColumn(prefix.replace(/> ?/g, ''), prefix.replace(/> ?/g, '').length)
-    let contentFrom = marker.to
-    if (source[contentFrom] === ' ' || source[contentFrom] === '\t') contentFrom++
-    let end = node.to
-    if (source[end] === '\r') end++
-    if (source[end] === '\n') end++
-    tasks.push({
-      marker: { from: marker.from, to: marker.to },
-      markerText: parsed.text,
-      bullet: source.slice(listMark.from, listMark.to),
-      checked: parsed.checked,
-      firstParagraph: { from: node.from, to: node.to },
-      firstParagraphRemoval: { from: lineFrom, to: end },
-      item: { from: item.from, to: item.to },
-      firstParagraphMarkdown: readTaskFirstParagraph(source, node, column),
-      contentFrom,
-      continuationPrefix,
-    })
-  } })
+  tree.iterate({
+    enter(reference) {
+      if (reference.name !== 'Task') return
+      const node = reference.node
+      const item = node.parent
+      const marker = node.getChild('TaskMarker')
+      const listMark = item?.getChild('ListMark')
+      if (!item || !marker || !listMark) return
+      const parsed = readTaskMarker(source.slice(marker.from, marker.to))
+      if (!parsed) return
+      const lineFrom = source.lastIndexOf('\n', marker.from - 1) + 1
+      const { continuationPrefix, siblingPrefix, column } = getTaskPrefixes(
+        source,
+        item,
+        marker.from,
+      )
+      const paragraphEnd = source[node.to - 1] === '\r' ? node.to - 1 : node.to
+      const itemEnd = source[item.to - 1] === '\r' ? item.to - 1 : item.to
+      let contentFrom = marker.to
+      if (source[contentFrom] === ' ' || source[contentFrom] === '\t') contentFrom++
+      let end = paragraphEnd
+      if (source[end] === '\r') end++
+      if (source[end] === '\n') end++
+      tasks.push({
+        marker: { from: marker.from, to: marker.to },
+        markerText: parsed.text,
+        bullet: source.slice(listMark.from, listMark.to),
+        checked: parsed.checked,
+        firstParagraph: { from: node.from, to: paragraphEnd },
+        firstParagraphRemoval: { from: lineFrom, to: end },
+        item: { from: item.from, to: itemEnd },
+        firstParagraphMarkdown: readTaskFirstParagraph(source, node, column),
+        contentFrom,
+        continuationPrefix,
+        siblingPrefix,
+      })
+    },
+  })
   return tasks
 }
 
-/** Apply non-overlapping edits against one immutable source snapshot. */
+function getTaskPrefixes(
+  source: string,
+  item: SyntaxNode,
+  markerOffset: number,
+): { continuationPrefix: string; siblingPrefix: string; column: number } {
+  const lineFrom = source.lastIndexOf('\n', markerOffset - 1) + 1
+  let continuationPrefix = source.slice(lineFrom, markerOffset)
+  let siblingPrefix = continuationPrefix
+  for (let ancestor: SyntaxNode | null = item; ancestor; ancestor = ancestor.parent) {
+    const mark = ancestor.name === 'ListItem' ? ancestor.getChild('ListMark') : null
+    if (!mark || mark.from < lineFrom || mark.to > markerOffset) continue
+    const start = mark.from - lineFrom
+    const end = mark.to - lineFrom
+    continuationPrefix =
+      continuationPrefix.slice(0, start) + ' '.repeat(end - start) + continuationPrefix.slice(end)
+    if (ancestor !== item)
+      siblingPrefix =
+        siblingPrefix.slice(0, start) + ' '.repeat(end - start) + siblingPrefix.slice(end)
+  }
+  let localPrefix = continuationPrefix.slice(continuationPrefix.lastIndexOf('>') + 1)
+  if (continuationPrefix.includes('>') && localPrefix.startsWith(' '))
+    localPrefix = localPrefix.slice(1)
+  return {
+    continuationPrefix,
+    siblingPrefix,
+    column: measureContentColumn(localPrefix, localPrefix.length),
+  }
+}
+
+/**
+ * Apply non-overlapping edits against one immutable source snapshot.
+ */
 export function applySourceEdits(source: string, edits: readonly SourceEdit[]): string {
   const sorted = [...edits].sort((left, right) => right.range.from - left.range.from)
   let boundary = source.length
   for (const edit of sorted) {
     const { from, to } = edit.range
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > boundary || source.slice(from, to) !== edit.expected) {
+    if (
+      !Number.isSafeInteger(from) ||
+      !Number.isSafeInteger(to) ||
+      from < 0 ||
+      to < from ||
+      to > boundary ||
+      source.slice(from, to) !== edit.expected
+    ) {
       throw new Error('Source edit is stale or overlaps another edit')
     }
     source = source.slice(0, from) + edit.insert + source.slice(to)
@@ -102,35 +167,69 @@ export function applySourceEdits(source: string, edits: readonly SourceEdit[]): 
   return source
 }
 
-/** Plan a mutation against the exact source from which the task was scanned. */
-export function planTaskSourceEdits(source: string, task: TaskSourceItem, mutation: TaskSourceMutation): SourceEdit[] {
-  const edit = (range: SourceRange, insert: string): SourceEdit[] => [{ range, expected: source.slice(range.from, range.to), insert }]
-  if (source.slice(task.marker.from, task.marker.to) !== task.markerText) throw new Error('Task marker is stale')
-  if (mutation.kind === 'setChecked') return edit(task.marker, mutation.value ? (task.markerText === '[X]' ? '[X]' : '[x]') : '[ ]')
+/**
+ * Plan a mutation against the exact source from which the task was scanned.
+ */
+export function planTaskSourceEdits(
+  source: string,
+  task: TaskSourceItem,
+  mutation: TaskSourceMutation,
+): SourceEdit[] {
+  const edit = (range: SourceRange, insert: string): SourceEdit[] => [
+    { range, expected: source.slice(range.from, range.to), insert },
+  ]
+  if (source.slice(task.marker.from, task.marker.to) !== task.markerText)
+    throw new Error('Task marker is stale')
+  if (mutation.kind === 'setChecked')
+    return edit(task.marker, mutation.value ? (task.markerText === '[X]' ? '[X]' : '[x]') : '[ ]')
   if (mutation.kind === 'removeFirstParagraph') return edit(task.firstParagraphRemoval, '')
-  if (mutation.kind === 'toBullet') return edit({ from: task.marker.from, to: task.contentFrom }, '')
-  const newline = source.slice(task.firstParagraphRemoval.from, task.firstParagraphRemoval.to).includes('\r\n') ? '\r\n' : '\n'
-  const content = mutation.firstParagraphMarkdown.replace(/\r\n?/g, '\n')
+  if (mutation.kind === 'toBullet')
+    return edit({ from: task.marker.from, to: task.contentFrom }, '')
+  const newline = source
+    .slice(task.firstParagraphRemoval.from, task.firstParagraphRemoval.to)
+    .includes('\r\n')
+    ? '\r\n'
+    : '\n'
+  const content = mutation.firstParagraphMarkdown.replaceAll(/\r\n?/g, '\n')
   if (/\n[ \t]*\n/.test(content)) throw new Error('Task content must be one paragraph')
   const lines = content.split('\n').map((line, index) => {
     if (index === 0) return line
-    // Prevent a continuation from opening a new block.
-    return line.replace(/^(\s*)([#>+*<`~=-])/, '$1\\$2').replace(/^(\s*\d+)([.)])(?=\s)/, '$1\\$2')
+    const probe = 'text\n' + line
+    const block = gfmParser.parse(probe).topNode.firstChild
+    if (block?.name === 'Paragraph' && block.to === probe.length && !block.nextSibling) return line
+    return line
+      .replace(/^(\s*)([#>+*<`~=-])/, String.raw`$1\$2`)
+      .replace(/^(\s*\d+)([.)])(?=\s)/, String.raw`$1\$2`)
   })
   const replacement = lines.join(newline + task.continuationPrefix)
   const edits = edit({ from: task.marker.to, to: task.firstParagraph.to }, ' ' + replacement)
   const next = applySourceEdits(source, edits)
   const parsed = scanTaskItems(next).find((item) => item.marker.from === task.marker.from)
-  if (!parsed || parsed.firstParagraph.to !== task.marker.to + 1 + replacement.length) throw new Error('Task content must remain a single paragraph')
+  if (!parsed || parsed.firstParagraph.to !== task.marker.to + 1 + replacement.length)
+    throw new Error('Task content must remain a single paragraph')
   return edits
 }
 
-/** Insert an empty sibling after an item, or a top-level task at the end. */
+/**
+ * Insert an empty sibling after an item, or a top-level task at the end.
+ */
 export function planTaskInsertion(source: string, after?: TaskSourceItem): SourceEdit {
   const offset = after?.item.to ?? source.length
   const newline = source.includes('\r\n') ? '\r\n' : '\n'
-  const prefix = after ? source.slice(after.firstParagraphRemoval.from, after.marker.from) : '+ '
+  const prefix = after?.siblingPrefix ?? '+ '
   const leading = offset > 0 && source[offset - 1] !== '\n' ? newline : ''
   const trailing = source[offset] === '\r' || source[offset] === '\n' ? '' : newline
-  return { range: { from: offset, to: offset }, expected: '', insert: `${leading}${prefix}[ ] ${trailing}` }
+  const edit = {
+    range: { from: offset, to: offset },
+    expected: '',
+    insert: `${leading}${prefix}[ ] ${trailing}`,
+  }
+  const markerOffset = offset + leading.length + prefix.length
+  if (
+    !scanTaskItems(applySourceEdits(source, [edit])).some(
+      (task) => task.marker.from === markerOffset,
+    )
+  )
+    throw new Error('Insertion does not create a task')
+  return edit
 }

@@ -116,9 +116,13 @@ export interface MarkdownViewProps {
    * The Markdown to render. Live: changing it re-renders the content.
    */
   markdown: string
-  /** Interpret content as one paragraph, without block syntax. */
+  /**
+   * Interpret content as one paragraph, without block syntax.
+   */
   inline?: boolean
-  /** Reference definitions available outside this fragment. */
+  /**
+   * Reference definitions available outside this fragment.
+   */
   referenceDefinitions?: ReferenceDefinitions
   /**
    * Mark mode for the read-only view. Defaults to `'hide'`.
@@ -1110,9 +1114,14 @@ export function MarkdownView({
   )
 }
 
-export type MarkdownInlineViewProps = Omit<MarkdownViewProps, 'inline' | 'frontmatter' | 'onTaskClick'>
+export type MarkdownInlineViewProps = Omit<
+  MarkdownViewProps,
+  'inline' | 'frontmatter' | 'onTaskClick'
+>
 
-/** Render paragraph content using the shared inline marks and link handlers. */
+/**
+ * Render paragraph content using the shared inline marks and link handlers.
+ */
 export function MarkdownInlineView(props: MarkdownInlineViewProps): ReactElement {
   return <MarkdownView {...props} inline />
 }

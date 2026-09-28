@@ -10,4 +10,15 @@ export type { SyntaxNode, Tree, TreeCursor } from '@lezer/common'
 export type { MarkdownParser } from './parser.ts'
 
 export { dedentContinuation, measureContentColumn, sliceColumn, readLeafText } from './leaf-text.ts'
-export { scanTaskItems, readTaskFirstParagraph, readTaskMarker, planTaskSourceEdits, applySourceEdits, planTaskInsertion, type SourceRange, type SourceEdit, type TaskSourceItem, type TaskSourceMutation } from './task-source.ts'
+export {
+  scanTaskItems,
+  readTaskFirstParagraph,
+  readTaskMarker,
+  planTaskSourceEdits,
+  applySourceEdits,
+  planTaskInsertion,
+  type SourceRange,
+  type SourceEdit,
+  type TaskSourceItem,
+  type TaskSourceMutation,
+} from './task-source.ts'

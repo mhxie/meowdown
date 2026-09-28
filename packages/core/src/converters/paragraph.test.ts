@@ -12,6 +12,8 @@ describe('paragraph content', () => {
   })
 
   it('flattens pasted blocks into paragraph content', () => {
-    expect(docToParagraphMarkdown(markdownToDoc('# heading\n\n> **quote**\n\n- item'))).toBe('heading\n**quote**\nitem')
+    expect(docToParagraphMarkdown(markdownToDoc('# heading\n\n> **quote**\n\n- item'))).toBe(
+      'heading\n**quote**\nitem',
+    )
   })
 })
