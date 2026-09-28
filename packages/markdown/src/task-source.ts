@@ -260,26 +260,97 @@ export function planTaskSourceEdits(
 }
 
 /**
- * Insert an empty sibling after an item, or a top-level task at the end.
- * FIXME: 请重新设计这里的 API，因为我们希望未来能够支持 https://github.com/team-reflect/reflect-open/pull/1256 这种场景
+ * A caller-selected insertion boundary. Heading/section selection remains the
+ * caller's policy; this layer only writes list syntax at the chosen location.
  */
-export function planTaskInsertion(source: string, after?: TaskSourceItem): SourceEdit {
-  const offset = after?.item.to ?? source.length
-  const newline = source.includes('\r\n') ? '\r\n' : '\n'
-  const prefix = after?.siblingPrefix ?? '+ '
-  const leading = offset > 0 && source[offset - 1] !== '\n' ? newline : ''
-  const trailing = source[offset] === '\r' || source[offset] === '\n' ? '' : newline
-  const edit = {
+export type TaskInsertionTarget =
+  | { readonly kind: 'afterItem'; readonly item: TaskSourceItem }
+  | {
+      readonly kind: 'position'
+      readonly offset: number
+      /**
+       * Container prefix and bullet, for example `"+ "` or `">   - "`.
+       */
+      readonly prefix?: string
+      /**
+       * Separate a newly started list from surrounding prose with blank lines.
+       */
+      readonly separate?: boolean
+    }
+
+export interface TaskInsertionOptions {
+  /**
+   * Defaults to a top-level round task at the end of the supplied source.
+   */
+  readonly target?: TaskInsertionTarget
+  readonly firstParagraphMarkdown?: string
+  readonly checked?: boolean
+}
+
+/**
+ * Plan one insertion without choosing application-specific headings or sections.
+ * Source offsets refer to the unmodified input, including frontmatter if present.
+ * The returned edit can be combined with other non-overlapping source edits.
+ *
+ * @example
+ * // Continue a particular list, retaining its quote/list prefix.
+ * planTaskInsertion(source, { target: { kind: 'afterItem', item } })
+ * // Start a list beneath a heading selected by the caller.
+ * planTaskInsertion(source, {
+ *   target: { kind: 'position', offset: headingEnd, prefix: '+ ', separate: true },
+ *   firstParagraphMarkdown: 'Buy **milk**',
+ * })
+ */
+export function planTaskInsertion(source: string, options: TaskInsertionOptions = {}): SourceEdit {
+  const { offset, prefix, leading, trailing } = insertionBoundary(source, options.target)
+  const edit: SourceEdit = {
     range: { from: offset, to: offset },
     expected: '',
-    insert: `${leading}${prefix}[ ] ${trailing}`,
+    insert: `${leading}${prefix}[${options.checked ? 'x' : ' '}] ${trailing}`,
   }
   const markerOffset = offset + leading.length + prefix.length
-  if (
-    !scanTaskItems(applySourceEdits(source, [edit])).some(
-      (task) => task.marker.from === markerOffset,
+  const inserted = applySourceEdits(source, [edit])
+  const task = scanTaskItems(inserted).find((item) => item.marker.from === markerOffset)
+  if (!task) throw new Error('Insertion does not create a task')
+  if (options.firstParagraphMarkdown) {
+    const populated = applySourceEdits(
+      inserted,
+      planTaskSourceEdits(inserted, task, {
+        kind: 'replaceFirstParagraph',
+        firstParagraphMarkdown: options.firstParagraphMarkdown,
+      }),
     )
-  )
-    throw new Error('Insertion does not create a task')
+    return { ...edit, insert: populated.slice(offset, offset + populated.length - source.length) }
+  }
   return edit
+}
+
+function insertionBoundary(source: string, target: TaskInsertionTarget | undefined) {
+  const after = target?.kind === 'afterItem' ? target.item : undefined
+  const offset = target?.kind === 'position' ? target.offset : (after?.item.to ?? source.length)
+  const newline = source.includes('\r\n') ? '\r\n' : '\n'
+  const prefix =
+    target?.kind === 'position' ? (target.prefix ?? '+ ') : (after?.siblingPrefix ?? '+ ')
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    offset > source.length ||
+    /[\r\n]/.test(prefix)
+  )
+    throw new Error('Invalid task insertion boundary')
+  const separate = target?.kind === 'position' && target.separate === true
+  const { leading, trailing } = insertionSpacing(source, offset, newline, separate)
+  return { offset, prefix, leading, trailing }
+}
+
+function insertionSpacing(source: string, offset: number, newline: string, separate: boolean) {
+  let leading = offset > 0 && source[offset - 1] !== '\n' ? newline : ''
+  let trailing = source[offset] === '\r' || source[offset] === '\n' ? '' : newline
+  if (separate) {
+    if (offset > 0 && !(source.slice(0, offset) + leading).endsWith(newline + newline))
+      leading += newline
+    if (offset < source.length && !(trailing + source.slice(offset)).startsWith(newline + newline))
+      trailing += newline
+  }
+  return { leading, trailing }
 }

@@ -10,7 +10,23 @@ export const singleParagraphPluginKey = new PluginKey('single-paragraph')
 
 /**
  * Keep editing and pasted content within one paragraph.
- * FIXME: It seems that "defineSingleParagraph" is not used within meowdown. I assume that this is used for the outside app caller. If so, we should add more jsdoc here to describe the usage of this extension.
+ * Opt into this extension for inline Markdown fields such as task paragraphs.
+ * Register it alongside `defineMeowdown`, seed content with
+ * `paragraphMarkdownToDoc`, and read edits with `docToParagraphMarkdown`.
+ * Ordinary note editors should keep their full document behavior.
+ *
+ * Text input stays literal, before block input rules can consume prefixes.
+ * Transactions and pasted blocks flatten to paragraph text separated by soft
+ * lines. Reference definitions come from `referenceDefinitions` in the editor
+ * config; definition-looking content in the field remains visible literal text.
+ * Enter/submit, focus, and persistence remain the caller's responsibility.
+ *
+ * @example
+ * const editor = createEditor({
+ *   extension: union(defineMeowdown({ referenceDefinitions }), defineSingleParagraph()),
+ *   defaultContent: paragraphMarkdownToDoc('Buy **milk**'),
+ * })
+ * const markdown = docToParagraphMarkdown(editor.state.doc)
  */
 export function defineSingleParagraph(): PlainExtension {
   return withPriority(

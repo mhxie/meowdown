@@ -98,9 +98,11 @@ describe('task source', () => {
   it('inserts after the complete item rather than before its details', () => {
     const task = scanTaskItems(source).at(0)
     if (!task) throw new Error('Missing task')
-    expect(applySourceEdits(source, [planTaskInsertion(source, task)])).toBe(
-      '+ [ ] **A**\n  B\n\n  Detail\n+ [ ] \n',
-    )
+    expect(
+      applySourceEdits(source, [
+        planTaskInsertion(source, { target: { kind: 'afterItem', item: task } }),
+      ]),
+    ).toBe('+ [ ] **A**\n  B\n\n  Detail\n+ [ ] \n')
   })
 })
 
@@ -118,9 +120,11 @@ it('preserves every CRLF boundary while replacing and inserting', () => {
       }),
     ),
   ).toBe('+ [ ] C\r\n  D\r\n\r\n  Detail\r\n')
-  expect(applySourceEdits(markdown, [planTaskInsertion(markdown, task)])).toBe(
-    '+ [ ] A\r\n  B\r\n\r\n  Detail\r\n+ [ ] \r\n',
-  )
+  expect(
+    applySourceEdits(markdown, [
+      planTaskInsertion(markdown, { target: { kind: 'afterItem', item: task } }),
+    ]),
+  ).toBe('+ [ ] A\r\n  B\r\n\r\n  Detail\r\n+ [ ] \r\n')
   expect(
     applySourceEdits(
       markdown,
@@ -174,9 +178,11 @@ it('replaces and inserts a same-line nested task without duplicating its parent'
       }),
     ),
   ).toBe('- + [ ] C\n    D\n')
-  expect(applySourceEdits(markdown, [planTaskInsertion(markdown, task)])).toBe(
-    '- + [ ] A\n    B\n  + [ ] \n',
-  )
+  expect(
+    applySourceEdits(markdown, [
+      planTaskInsertion(markdown, { target: { kind: 'afterItem', item: task } }),
+    ]),
+  ).toBe('- + [ ] A\n    B\n  + [ ] \n')
 })
 
 it('refuses insertion into an unclosed fence', () => {
@@ -200,4 +206,16 @@ it.each([
   )
   expect(scanTaskItems(next)[0]?.firstParagraphMarkdown).toBe(expected)
   expect(next.endsWith('\n\n  Detail\n')).toBe(true)
+})
+
+it('inserts supplied content below a caller-selected heading without touching later sections', () => {
+  const markdown = '## Tasks\n\n## Other\n\nkeep me\n'
+  const edit = planTaskInsertion(markdown, {
+    target: { kind: 'position', offset: '## Tasks'.length, separate: true },
+    firstParagraphMarkdown: 'Buy **milk**',
+    checked: true,
+  })
+  expect(applySourceEdits(markdown, [edit])).toBe(
+    '## Tasks\n\n+ [x] Buy **milk**\n\n## Other\n\nkeep me\n',
+  )
 })

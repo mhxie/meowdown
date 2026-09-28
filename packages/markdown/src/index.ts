@@ -27,6 +27,8 @@ export {
   type SourceEdit,
   type TaskSourceItem,
   type TaskSourceMutation,
+  type TaskInsertionTarget,
+  type TaskInsertionOptions,
 } from './task-source.ts'
 
 export { getLezerNodeChild } from './node-child.ts'
