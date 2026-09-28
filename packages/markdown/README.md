@@ -74,3 +74,46 @@ inline values to retain text-boundary-sensitive continuation behavior. Changing 
 value invalidates those recorded segments. Unsupported editor blocks use `ignored`
 nodes, which emit nothing but keep list-run boundaries; standalone editor text uses
 `text`. The Markdown parser itself produces neither type.
+
+## Structural editing
+
+`walkMarkdownAst(document)` yields `{ node, parent, index, path }` in depth-first
+order, including the root at `[]`. `resolveMarkdownAstPath(document, path)` returns
+the same shape or `undefined` for an invalid address. Paths count every child,
+including paragraphs and table cells. They belong to one document revision, not
+to a persistent identity. Resolve every target before changing sibling arrays;
+then edit node references and traverse again to obtain the new paths.
+
+`getTaskParagraph(item)` returns the first paragraph of a task, or `undefined`
+when it is not a task or its first child is another block. It never substitutes
+a later paragraph. Edit `paragraph.value` and `item.checked` directly; insert,
+remove, or promote blocks using the appropriate parent's `children` array.
+
+```ts
+import {
+  getTaskParagraph,
+  parseMarkdownAst,
+  resolveMarkdownAstPath,
+  serializeMarkdownAst,
+} from '@meowdown/markdown'
+
+const document = parseMarkdownAst('+ [ ] Buy **milk**\n')
+const entry = resolveMarkdownAstPath(document, [0])
+if (entry?.node.type === 'listItem') {
+  const paragraph = getTaskParagraph(entry.node)
+  if (paragraph) {
+    paragraph.value = 'Buy **bread**'
+    entry.node.checked = true
+  }
+}
+const markdown = serializeMarkdownAst(document, { validate: true })
+```
+
+`validate: true` reparses a **document** and throws if block addresses, content,
+or semantic attributes change. It permits formatting normalization, such as
+fence width and checkbox letter case. It adds one parse and is opt-in, so ordinary
+editor serialization keeps its existing behavior. Validation does not mutate the
+AST or automatically escape literal Markdown. For example, a task paragraph
+`first\n# heading` cannot survive as a single paragraph and is rejected; use
+`first\n\\# heading` to express a literal hash. Treat failure as an uncommitted
+edit. Serialize once after a batch, and write only after validation succeeds.
