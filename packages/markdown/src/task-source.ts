@@ -60,12 +60,24 @@ export interface SourceEdit {
  * exact source passed to `scanTaskItems`; they are not stable task identifiers.
  *
  * @example
- * For `"+ [ ] first\n  second\n\n  detail"`, `marker` selects `[ ]`,
- * `firstParagraph` selects `[ ] first\n  second`, and `item` includes `detail`.
- * `firstParagraphRemoval` additionally includes the leading `+ ` and the first
- * paragraph's ending newline, but leaves the blank line and detail unchanged.
- * `firstParagraphMarkdown` is `"first\nsecond"`; `contentFrom` points at `f`.
- * `continuationPrefix` is `"  "` and `siblingPrefix` is `"+ "`.
+ * const source = '+ [ ] first\n  second\n\n  detail'
+ * const [task] = scanTaskItems(source)
+ * // task has these values (all coordinates refer to `source`):
+ * // {
+ * //   marker: { from: 2, to: 5 },                 // '[ ]'
+ * //   markerText: '[ ]',                         // exact marker spelling
+ * //   bullet: '+',                               // list marker, no whitespace
+ * //   checked: false,
+ * //   firstParagraph: { from: 2, to: 20 },        // '[ ] first\n  second'
+ * //   firstParagraphRemoval: { from: 0, to: 21 }, // '+ [ ] first\n  second\n'
+ * //   item: { from: 0, to: 30 },                  // includes the detail block
+ * //   firstParagraphMarkdown: 'first\nsecond',   // editable inline source
+ * //   contentFrom: 6,                            // offset of 'f' in 'first'
+ * //   continuationPrefix: '  ',                  // indentation for soft lines
+ * //   siblingPrefix: '+ ',                       // prefix for a sibling item
+ * // }
+ * // Use the editable Markdown for a field; use ranges only with this snapshot.
+ * // Removing firstParagraphRemoval leaves '\n  detail' untouched.
  */
 export interface TaskSourceItem {
   /**
@@ -212,7 +224,7 @@ export function readTaskFirstParagraph(source: string, node: SyntaxNode, column:
 /**
  * Scan real task nodes, including tasks nested in quotes and lists.
  * An optional tree must have been parsed from exactly `source`; callers may
- * share their existing parse. Fenced code and ordinary unchecked lists are not
+ * share their existing parse. Fenced code and ordinary non-task list items are not
  * tasks. Application filters (for example only `+` bullets) belong to callers.
  */
 export function scanTaskItems(
