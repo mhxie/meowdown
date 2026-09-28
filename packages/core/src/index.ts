@@ -208,3 +208,6 @@ export {
   defineYouTubeVideoClickHandler,
   type YouTubeVideoClickHandler,
 } from './extensions/youtube-video-click.ts'
+
+export { paragraphMarkdownToDoc, docToParagraphMarkdown } from './converters/paragraph.ts'
+export { defineSingleParagraph } from './extensions/single-paragraph.ts'

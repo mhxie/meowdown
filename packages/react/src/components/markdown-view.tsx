@@ -12,6 +12,7 @@ import {
   isNodeOfType,
   isReferenceDefinitionNode,
   markdownToDoc,
+  paragraphMarkdownToDoc,
   parsePostEmbedSnapshot,
   type CodeBlockAttrs,
   type CodeToken,
@@ -115,6 +116,10 @@ export interface MarkdownViewProps {
    * The Markdown to render. Live: changing it re-renders the content.
    */
   markdown: string
+  /** Interpret content as one paragraph, without block syntax. */
+  inline?: boolean
+  /** Reference definitions available outside this fragment. */
+  referenceDefinitions?: ReferenceDefinitions
   /**
    * Mark mode for the read-only view. Defaults to `'hide'`.
    */
@@ -992,6 +997,8 @@ const MarkdownBlock = memo(
  */
 export function MarkdownView({
   markdown,
+  inline = false,
+  referenceDefinitions: suppliedDefinitions,
   markMode = 'hide',
   frontmatter = false,
   interactive = true,
@@ -1051,14 +1058,14 @@ export function MarkdownView({
   )
 
   const { blocks, referenceDefinitions, definitionsKey } = useMemo(() => {
-    const doc = markdownToDoc(markdown, { frontmatter })
-    const referenceDefinitions = collectReferenceDefinitions(doc).definitions
+    const doc = inline ? paragraphMarkdownToDoc(markdown) : markdownToDoc(markdown, { frontmatter })
+    const referenceDefinitions = suppliedDefinitions ?? collectReferenceDefinitions(doc).definitions
     return {
       blocks: splitBlocks(doc),
       referenceDefinitions,
       definitionsKey: definitionsSignature(referenceDefinitions),
     }
-  }, [markdown, frontmatter])
+  }, [markdown, frontmatter, inline, suppliedDefinitions])
 
   // The cards' events bubble, so one listener each on the root covers every card.
   const handleXPostMediaClick = interactive ? onXPostMediaClick : undefined
@@ -1101,4 +1108,11 @@ export function MarkdownView({
       ))}
     </div>
   )
+}
+
+export type MarkdownInlineViewProps = Omit<MarkdownViewProps, 'inline' | 'frontmatter' | 'onTaskClick'>
+
+/** Render paragraph content using the shared inline marks and link handlers. */
+export function MarkdownInlineView(props: MarkdownInlineViewProps): ReactElement {
+  return <MarkdownView {...props} inline />
 }
