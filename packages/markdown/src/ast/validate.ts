@@ -13,12 +13,13 @@ export function validateSerializedAst(
   if (node.type !== 'document') throw new Error('AST validation requires a document root')
   const parsed = parseMarkdownAst(markdown, { frontmatter })
   const actual = walkMarkdownAst(parsed)
-  const document = node.children.length > 0
-    ? node
-    : {
-        ...node,
-        children: [{ type: 'paragraph' as const, value: '' }],
-      }
+  const document =
+    node.children.length > 0
+      ? node
+      : {
+          ...node,
+          children: [{ type: 'paragraph' as const, value: '' }],
+        }
   for (const expected of walkMarkdownAst(document)) {
     const entry = actual.next()
     if (

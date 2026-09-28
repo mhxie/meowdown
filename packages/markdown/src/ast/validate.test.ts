@@ -64,16 +64,18 @@ describe('validated serialization', () => {
   })
 
   it('rejects top-level paragraph text that would become a different block', () => {
-    expect(() => { return serializeMarkdownAst(
+    expect(() => {
+      return serializeMarkdownAst(
         { type: 'document', children: [{ type: 'paragraph', value: '# heading' }] },
         { validate: true },
-      ) },
-    ).toThrow(/content or structure/)
+      )
+    }).toThrow(/content or structure/)
   })
 
   it('requires a document root when validating', () => {
-    expect(() => { return serializeMarkdownAst({ type: 'paragraph', value: 'text' }, { validate: true }) },
-    ).toThrow('document root')
+    expect(() => {
+      return serializeMarkdownAst({ type: 'paragraph', value: 'text' }, { validate: true })
+    }).toThrow('document root')
   })
 
   it('serializes a document after its last task is removed', () => {
