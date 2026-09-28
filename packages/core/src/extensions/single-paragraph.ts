@@ -1,4 +1,4 @@
-import { definePlugin, withPriority, Priority, type PlainExtension } from '@prosekit/core'
+import { definePlugin, Priority, withPriority, type PlainExtension } from '@prosekit/core'
 import { Plugin, PluginKey, TextSelection } from '@prosekit/pm/state'
 
 import { docToParagraphMarkdown, paragraphMarkdownToDoc } from '../converters/paragraph.ts'
@@ -10,6 +10,7 @@ export const singleParagraphPluginKey = new PluginKey('single-paragraph')
 
 /**
  * Keep editing and pasted content within one paragraph.
+ * FIXME: It seems that "defineSingleParagraph" is not used within meowdown. I assume that this is used for the outside app caller. If so, we should add more jsdoc here to describe the usage of this extension.
  */
 export function defineSingleParagraph(): PlainExtension {
   return withPriority(
