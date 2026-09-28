@@ -219,3 +219,18 @@ it('inserts supplied content below a caller-selected heading without touching la
     '## Tasks\n\n+ [x] Buy **milk**\n\n## Other\n\nkeep me\n',
   )
 })
+
+it.each(['[ ] inner', '[x] inner', '# heading', '> quote', '1. item', '[ref]: /url'])(
+  'converts to a paragraph bullet without interpreting %s as a block',
+  (content) => {
+    const source = '+ [ ] old\n\n  > detail\n'
+    const task = scanTaskItems(source)[0]
+    const result = applySourceEdits(
+      source,
+      planTaskSourceEdits(source, task, { kind: 'toBullet', firstParagraphMarkdown: content }),
+    )
+    expect(scanTaskItems(result)).toHaveLength(0)
+    expect(result.endsWith('\n\n  > detail\n')).toBe(true)
+    expect(result).toContain('\\')
+  },
+)

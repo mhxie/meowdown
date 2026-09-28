@@ -84,7 +84,7 @@ export type TaskSourceMutation =
   | { readonly kind: 'setChecked'; readonly value: boolean }
   | { readonly kind: 'replaceFirstParagraph'; readonly firstParagraphMarkdown: string }
   | { readonly kind: 'removeFirstParagraph' }
-  | { readonly kind: 'toBullet' }
+  | { readonly kind: 'toBullet'; readonly firstParagraphMarkdown?: string }
 
 export function readTaskMarker(
   text: string,
@@ -232,20 +232,27 @@ export function planTaskSourceEdits(
   if (mutation.kind === 'setChecked')
     return edit(task.marker, mutation.value ? (task.markerText === '[X]' ? '[X]' : '[x]') : '[ ]')
   if (mutation.kind === 'removeFirstParagraph') return edit(task.firstParagraphRemoval, '')
-  if (mutation.kind === 'toBullet')
-    return edit({ from: task.marker.from, to: task.contentFrom }, '')
   const newline = source
     .slice(task.firstParagraphRemoval.from, task.firstParagraphRemoval.to)
     .includes('\r\n')
     ? '\r\n'
     : '\n'
   // Pasted blocks become soft lines. Empty boundary lines are not paragraph content.
-  const content = mutation.firstParagraphMarkdown
+  const content = (mutation.firstParagraphMarkdown ?? task.firstParagraphMarkdown)
     .replaceAll(/\r\n?/g, '\n')
     .replaceAll(/\n[ \t]*\n+/g, '\n')
     .replaceAll(/^\n+|\n+$/g, '')
   const lines = content.split('\n').map((line, index) => {
-    if (index === 0) return line
+    if (index === 0) {
+      if (mutation.kind !== 'toBullet') return line
+      // Removing the checkbox exposes this text to block parsing. Escape only
+      // a prefix that would change the ordinary bullet's paragraph semantics.
+      const item = gfmParser.parse('+ ' + line).topNode.firstChild?.firstChild
+      if (item?.firstChild?.nextSibling?.name === 'Paragraph') return line
+      return line
+        .replace(/^(\s*)([[#>+*<`~=-])/, String.raw`$1\$2`)
+        .replace(/^(\s*\d+)([.)])(?=\s)/, String.raw`$1\$2`)
+    }
     const probe = 'text\n' + line
     const block = gfmParser.parse(probe).topNode.firstChild
     if (block?.name === 'Paragraph' && block.to === probe.length && !block.nextSibling) return line
@@ -256,7 +263,9 @@ export function planTaskSourceEdits(
       .replace(/^(\s*\d+)([.)])(?=\s)/, String.raw`$1\$2`)
   })
   const replacement = lines.join(newline + task.continuationPrefix)
-  return edit({ from: task.marker.to, to: task.firstParagraph.to }, ' ' + replacement)
+  return mutation.kind === 'toBullet'
+    ? edit({ from: task.marker.from, to: task.firstParagraph.to }, replacement)
+    : edit({ from: task.marker.to, to: task.firstParagraph.to }, ' ' + replacement)
 }
 
 /**
