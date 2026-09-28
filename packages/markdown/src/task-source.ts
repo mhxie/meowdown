@@ -18,6 +18,7 @@ export interface SourceEdit {
   readonly insert: string
 }
 
+// FIXME please use JSDoc to describe the properties of TaskSourceItem. Use you can add a single JSDoc to TaskSourceItem, with an example to illustrate what each property means.
 export interface TaskSourceItem {
   readonly marker: SourceRange
   readonly markerText: '[ ]' | '[x]' | '[X]'
