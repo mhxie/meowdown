@@ -17,9 +17,13 @@ import { gfmParser } from './parser.ts'
  * source.slice(marker.from, marker.to) // '[ ]'
  */
 export interface SourceRange {
-  /** Inclusive start, between 0 and the source string's length. */
+  /**
+   * Inclusive start, between 0 and the source string's length.
+   */
   readonly from: number
-  /** Exclusive end, at least `from`; equal endpoints represent an insertion. */
+  /**
+   * Exclusive end, at least `from`; equal endpoints represent an insertion.
+   */
   readonly to: number
 }
 
@@ -37,11 +41,17 @@ export interface SourceRange {
  * // Insert: use equal endpoints and expected: ''. Delete: use insert: ''.
  */
 export interface SourceEdit {
-  /** Range in the original source, before any other patch has been applied. */
+  /**
+   * Range in the original source, before any other patch has been applied.
+   */
   readonly range: SourceRange
-  /** Exact original `source.slice(range.from, range.to)`; a mismatch throws. */
+  /**
+   * Exact original `source.slice(range.from, range.to)`; a mismatch throws.
+   */
   readonly expected: string
-  /** Replacement source, including any Markdown syntax and physical newlines. */
+  /**
+   * Replacement source, including any Markdown syntax and physical newlines.
+   */
   readonly insert: string
 }
 
@@ -123,13 +133,19 @@ export interface TaskSourceItem {
  */
 export type TaskSourceMutation =
   | {
-      /** Set a checkbox explicitly; retrying does not toggle it back. */
+      /**
+       * Set a checkbox explicitly; retrying does not toggle it back.
+       */
       readonly kind: 'setChecked'
-      /** Desired state; an already uppercase `[X]` remains uppercase when true. */
+      /**
+       * Desired state; an already uppercase `[X]` remains uppercase when true.
+       */
       readonly value: boolean
     }
   | {
-      /** Replace the editable paragraph while retaining the checkbox. */
+      /**
+       * Replace the editable paragraph while retaining the checkbox.
+       */
       readonly kind: 'replaceFirstParagraph'
       /**
        * Inline Markdown without bullet/checkbox/container prefixes. LF denotes
@@ -139,11 +155,15 @@ export type TaskSourceMutation =
       readonly firstParagraphMarkdown: string
     }
   | {
-      /** Delete `firstParagraphRemoval`, leaving all later item blocks intact. */
+      /**
+       * Delete `firstParagraphRemoval`, leaving all later item blocks intact.
+       */
       readonly kind: 'removeFirstParagraph'
     }
   | {
-      /** Remove the checkbox, retaining an ordinary paragraph list item. */
+      /**
+       * Remove the checkbox, retaining an ordinary paragraph list item.
+       */
       readonly kind: 'toBullet'
       /**
        * Optional simultaneous paragraph edit; omitted means retain the current
@@ -352,13 +372,19 @@ export function planTaskSourceEdits(
  */
 export type TaskInsertionTarget =
   | {
-      /** Insert after the complete item, including its detail blocks. */
+      /**
+       * Insert after the complete item, including its detail blocks.
+       */
       readonly kind: 'afterItem'
-      /** Item scanned from the same source; supplies `item.to` and `siblingPrefix`. */
+      /**
+       * Item scanned from the same source; supplies `item.to` and `siblingPrefix`.
+       */
       readonly item: TaskSourceItem
     }
   | {
-      /** Insert at a caller-chosen source boundary, such as the end of a heading. */
+      /**
+       * Insert at a caller-chosen source boundary, such as the end of a heading.
+       */
       readonly kind: 'position'
       /**
        * UTF-16 position in the unchanged source. Choose a block boundary, not
@@ -392,9 +418,13 @@ export interface TaskInsertionOptions {
    * Defaults to a top-level round task at the end of the supplied source.
    */
   readonly target?: TaskInsertionTarget
-  /** Inline Markdown without checkbox/container prefixes; defaults to empty. */
+  /**
+   * Inline Markdown without checkbox/container prefixes; defaults to empty.
+   */
   readonly firstParagraphMarkdown?: string
-  /** Initial checkbox state; defaults to false, true writes lowercase `[x]`. */
+  /**
+   * Initial checkbox state; defaults to false, true writes lowercase `[x]`.
+   */
   readonly checked?: boolean
 }
 
