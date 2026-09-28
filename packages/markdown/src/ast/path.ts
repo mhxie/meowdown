@@ -19,23 +19,24 @@ export interface MarkdownAstEntry {
   path: MarkdownAstPath
 }
 
+function* visit(entry: MarkdownAstEntry): Generator<MarkdownAstEntry> {
+  yield entry
+  const children = entry.node.children
+  if (!children) return
+  for (let index = 0; index < children.length; index++) {
+    yield* visit({
+      node: children[index],
+      parent: entry.node,
+      index,
+      path: [...entry.path, index],
+    })
+  }
+}
+
 /**
  * Visit the root and every descendant, including table rows and cells, in document order.
  */
 export function* walkMarkdownAst(root: MarkdownNode): Generator<MarkdownAstEntry> {
-  function* visit(entry: MarkdownAstEntry): Generator<MarkdownAstEntry> {
-    yield entry
-    const children = entry.node.children
-    if (!children) return
-    for (let index = 0; index < children.length; index++) {
-      yield* visit({
-        node: children[index],
-        parent: entry.node,
-        index,
-        path: [...entry.path, index],
-      })
-    }
-  }
   yield* visit({ node: root, parent: undefined, index: undefined, path: [] })
 }
 
