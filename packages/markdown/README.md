@@ -106,14 +106,5 @@ if (entry?.node.type === 'listItem') {
     entry.node.checked = true
   }
 }
-const markdown = serializeMarkdownAst(document, { validate: true })
+const markdown = serializeMarkdownAst(document)
 ```
-
-`validate: true` reparses a **document** and throws if block addresses, content,
-or semantic attributes change. It permits formatting normalization, such as
-fence width and checkbox letter case. It adds one parse and is opt-in, so ordinary
-editor serialization keeps its existing behavior. Validation does not mutate the
-AST or automatically escape literal Markdown. For example, a task paragraph
-`first\n# heading` cannot survive as a single paragraph and is rejected; use
-`first\n\\# heading` to express a literal hash. Treat failure as an uncommitted
-edit. Serialize once after a batch, and write only after validation succeeds.

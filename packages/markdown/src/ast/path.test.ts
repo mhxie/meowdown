@@ -88,16 +88,14 @@ describe('AST paths', () => {
     const paragraph = getTaskParagraph(second)
     if (!paragraph) throw new Error('Expected paragraph')
     paragraph.value = 'changed'
-    expect(serializeMarkdownAst(document, { validate: true })).toBe(
-      '+ [ ] changed\n+ [x] duplicate\n',
-    )
+    expect(serializeMarkdownAst(document)).toBe('+ [ ] changed\n+ [x] duplicate\n')
     expect(resolveMarkdownAstPath(document, [1])?.node).toBe(third)
   })
 
   it('inserts an empty task and preserves it through whole-document serialization', () => {
     const document = parseMarkdownAst('# Tasks\n')
     document.children.push(task(''))
-    const output = serializeMarkdownAst(document, { validate: true })
+    const output = serializeMarkdownAst(document)
     expect(output).toBe('# Tasks\n\n+ [ ] \n')
     expect(getTaskParagraph(parseMarkdownAst(output).children[1])?.value).toBe('')
     expect(serializeMarkdownAst(task(''))).toBe('+ [ ] \n')
@@ -113,7 +111,7 @@ describe('AST paths', () => {
     if (child?.type !== 'listItem') throw new Error('Expected child task')
     document.children.splice(0, 1, ...parent.children.slice(1))
     child.checked = true
-    const output = serializeMarkdownAst(document, { validate: true })
+    const output = serializeMarkdownAst(document)
     expect(output).toBe('details\n\n> quote\n\n## Heading\n\n+ [x] child\n')
     expect(resolveMarkdownAstPath(document, [3])?.node).toBe(child)
   })
@@ -125,6 +123,6 @@ describe('AST paths', () => {
     item.kind = 'bullet'
     item.marker = '-'
     item.collapsed = false
-    expect(serializeMarkdownAst(document, { validate: true })).toBe('- parent\n\n  > quote\n')
+    expect(serializeMarkdownAst(document)).toBe('- parent\n\n  > quote\n')
   })
 })
