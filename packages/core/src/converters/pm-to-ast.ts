@@ -3,6 +3,7 @@ import type {
   MarkdownDocument,
   MarkdownInline,
   MarkdownNode,
+  MarkdownTable,
   MarkdownTableCell,
   MarkdownTableRow,
 } from '@meowdown/markdown'
@@ -36,25 +37,25 @@ export function docToAst(node: ProseMirrorNode): MarkdownNode {
 }
 
 function readBlocks(node: ProseMirrorNode): MarkdownBlock[] {
-  const children: MarkdownBlock[] = []
-  node.forEach((child) => {
-    children.push(readBlock(child))
-  })
-  return children
+  return node.content.content.map(readBlock)
 }
 
 function readBlock(node: ProseMirrorNode): MarkdownBlock {
   switch (node.type.name as NodeName) {
-    case 'paragraph':
-      return { type: 'paragraph', ...readInline(node) }
+    case 'paragraph': {
+      const inline = readInline(node)
+      return { type: 'paragraph', value: inline.value, segments: inline.segments }
+    }
     case 'heading': {
       const attrs = node.attrs as MeowdownHeadingAttrs
+      const inline = readInline(node)
       return {
         type: 'heading',
         level: attrs.level,
         setextUnderline: attrs.setextUnderline ?? undefined,
         closingHashes: attrs.closingHashes ?? undefined,
-        ...readInline(node),
+        value: inline.value,
+        segments: inline.segments,
       }
     }
     case 'blockquote':
@@ -91,11 +92,7 @@ function readBlock(node: ProseMirrorNode): MarkdownBlock {
     case 'htmlComment':
       return { type: 'htmlComment', value: (node.attrs as MeowdownHTMLCommentAttrs).content }
     case 'table': {
-      const children: MarkdownTableRow[] = []
-      node.forEach((row) => {
-        children.push(readTableRow(row))
-      })
-      return { type: 'table', children }
+      return readTable(node)
     }
     case 'text':
       return { type: 'text', value: node.text ?? '' }
@@ -105,25 +102,30 @@ function readBlock(node: ProseMirrorNode): MarkdownBlock {
 }
 
 function readInline(node: ProseMirrorNode): MarkdownInline {
-  if (node.childCount === 0) return { value: '' }
+  const content = node.content.content
+  const count = content.length
+  if (count === 0) return { value: '', segments: undefined }
+
   const first = node.child(0)
-  if (node.childCount === 1 && first.isText) return { value: first.text ?? '' }
-  const chunks: Array<string | undefined> = []
+  if (count === 1 && first.isText) return { value: first.text ?? '', segments: undefined }
+
+  const chunks: Array<string | undefined> = new Array<string | undefined>(count)
   let value = ''
-  node.forEach((child) => {
+  for (let i = 0; i < count; i++) {
+    const child = content[i]
     const text = child.isText ? child.text : undefined
-    chunks.push(text)
+    chunks[i] = text
     if (text) value += text
-  })
+  }
   return { value, segments: { value, chunks, textContent: node.textContent } }
 }
 
+function readTable(node: ProseMirrorNode): MarkdownTable {
+  return { type: 'table', children: node.content.content.map(readTableRow) }
+}
+
 function readTableRow(node: ProseMirrorNode): MarkdownTableRow {
-  const children: MarkdownTableCell[] = []
-  node.forEach((cell) => {
-    children.push(readTableCell(cell))
-  })
-  return { type: 'tableRow', children }
+  return { type: 'tableRow', children: node.content.content.map(readTableCell) }
 }
 
 function readTableCell(node: ProseMirrorNode): MarkdownTableCell {
