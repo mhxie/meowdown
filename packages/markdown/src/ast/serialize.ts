@@ -30,6 +30,7 @@ import type {
   MarkdownTable,
   MarkdownTableCell,
 } from './types.ts'
+import { validateSerializedAst } from './validate.ts'
 
 /**
  * Options for {@link serializeMarkdownAst}.
@@ -39,6 +40,12 @@ export interface SerializeMarkdownAstOptions {
    * Whether to serialize the doc's `frontmatter` attribute as a leading `---` block. Off by default.
    */
   frontmatter?: boolean
+  /**
+   * Reparse a document and throw if its block structure or content changes.
+   * Formatting attributes may normalize. Raw paragraph text that opens a block
+   * must be escaped by the caller or rejected. Off by default; adds one parse.
+   */
+  validate?: boolean
 }
 
 /**
@@ -67,10 +74,12 @@ export function serializeMarkdownAst(
   // A document holds at least one block, so a lone empty paragraph is the
   // empty document, not a blank line.
   const child = node.children?.length === 1 ? node.children[0] : undefined
-  if (!(child?.type === 'paragraph' && !hasInlineContent(child))) {
+  if (!(node.type === 'document' && child?.type === 'paragraph' && !hasInlineContent(child))) {
     emit(node, out)
   }
-  return out.finish()
+  const markdown = out.finish()
+  if (options.validate) validateSerializedAst(node, markdown, !!options.frontmatter)
+  return markdown
 }
 
 /**

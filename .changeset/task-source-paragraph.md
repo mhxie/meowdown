@@ -4,4 +4,4 @@
 '@meowdown/react': minor
 ---
 
-Add task source editing APIs, single-paragraph editing, and inline Markdown previews with reference context.
+Add AST path traversal and validated serialization, single-paragraph editing, and inline Markdown previews with reference context.

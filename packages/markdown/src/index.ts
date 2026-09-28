@@ -29,3 +29,12 @@ export type {
   MarkdownBlock,
   MarkdownNode,
 } from './ast/types.ts'
+
+export { getLezerNodeChild } from './node-child.ts'
+export {
+  walkMarkdownAst,
+  resolveMarkdownAstPath,
+  getTaskParagraph,
+  type MarkdownAstPath,
+  type MarkdownAstEntry,
+} from './ast/path.ts'

@@ -2,6 +2,8 @@ import type { ProseMirrorNode } from '@prosekit/pm/model'
 
 import { getNodeBuilders, type TypedNodeBuilders } from '../extensions/schema.ts'
 
+import { astToDoc } from './ast-to-pm.ts'
+
 /**
  * Build one paragraph without interpreting block-opening Markdown.
  */
@@ -9,8 +11,17 @@ export function paragraphMarkdownToDoc(
   markdown: string,
   nodes: TypedNodeBuilders = getNodeBuilders(),
 ): ProseMirrorNode {
-  return nodes.doc(
-    nodes.paragraph(markdown.replaceAll(/\r\n?/g, '\n').replaceAll(/\n[ \t]*\n+/g, '\n')),
+  return astToDoc(
+    {
+      type: 'document',
+      children: [
+        {
+          type: 'paragraph',
+          value: markdown.replaceAll(/\r\n?/g, '\n').replaceAll(/\n[ \t]*\n+/g, '\n'),
+        },
+      ],
+    },
+    nodes,
   )
 }
 
