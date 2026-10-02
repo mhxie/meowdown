@@ -14,6 +14,7 @@ import {
 } from '../testing/index.ts'
 
 import type { ImageClickHandler } from './image-click.ts'
+import type { EmbedResolver, HostEmbed, ImageUrlResolver } from './image.ts'
 import type { MarkMode } from './mark-mode.ts'
 
 const pmRoot = page.locate('.ProseMirror')
@@ -645,5 +646,147 @@ describe('image source spellcheck exemption', () => {
     await expect.element(imageSource).toHaveAttribute('autocapitalize', 'off')
     await expect.element(imageSource).toHaveAttribute('writingsuggestions', 'false')
     expect(imageSource.element()).toHaveProperty('spellcheck', false)
+  })
+})
+
+describe('host embeds', () => {
+  const box = pmRoot.getByTestId('host-embed-resizable')
+
+  // A 3:4 page: unsized, it caps at 500 tall (375 wide); a 300 wide box is 400 tall.
+  function hostEmbed(): { embed: HostEmbed; destroy: ReturnType<typeof vi.fn> } {
+    const element = document.createElement('div')
+    element.dataset.testid = 'host-content'
+    const destroy = vi.fn()
+    return { embed: { element, width: 600, height: 800, destroy }, destroy }
+  }
+
+  function deferredEmbed() {
+    let resolve!: (embed: HostEmbed | undefined) => void
+    const promise = new Promise<HostEmbed | undefined>((res) => {
+      resolve = res
+    })
+    return { promise, resolve }
+  }
+
+  function setupEmbed(
+    text: string,
+    resolveEmbed: EmbedResolver,
+    resolveImageUrl?: ImageUrlResolver,
+  ): Fixture {
+    const fixture = setupFixture({
+      extensionOptions: {
+        markMode: 'hide',
+        resolveEmbed,
+        resolveWikiEmbed: () => ({ kind: 'image' }),
+        ...(resolveImageUrl ? { resolveImageUrl } : {}),
+      },
+    })
+    fixture.set(fixture.n.doc(fixture.n.paragraph(text)))
+    return fixture
+  }
+
+  it('renders host content in a ratio-locked box sized like an image', async () => {
+    const { embed } = hostEmbed()
+    using fixture = setupEmbed('![doc](a.pdf)', () => embed)
+    void fixture
+    await expect.element(box.getByTestId('host-content')).toBeInTheDocument()
+    await expect.element(box).toHaveAttribute('data-width', '375')
+    await expect.element(box).toHaveAttribute('data-height', '500')
+    await expect.element(box).toHaveAttribute('data-aspect-ratio', '0.75')
+    await expect.element(box).not.toHaveAttribute('data-loading')
+  })
+
+  it('derives the height from a persisted width', async () => {
+    const { embed } = hostEmbed()
+    using fixture = setupEmbed('![doc](a.pdf)<!-- {"width":300} -->', () => embed)
+    void fixture
+    await expect.element(box).toHaveAttribute('data-width', '300')
+    await expect.element(box).toHaveAttribute('data-height', '400')
+  })
+
+  it('defers to resolveImageUrl when resolveEmbed returns undefined', async () => {
+    using fixture = setupEmbed(
+      '![cat](cat.png)',
+      () => undefined,
+      () => getSVGImageURL(10, 10),
+    )
+    void fixture
+    await expect.element(pmRoot.getByAltText('cat')).toBeInTheDocument()
+    expect(box.elements()).toHaveLength(0)
+  })
+
+  it('writes the size when resized and keeps the same content', async () => {
+    const { embed } = hostEmbed()
+    using fixture = setupEmbed('![doc](a.pdf)', () => embed)
+    await expect.element(box).toBeInTheDocument()
+    box
+      .element()
+      .dispatchEvent(new CustomEvent('resizeEnd', { detail: { width: 300, height: 400 } }))
+    await vi.waitFor(() => {
+      expect(fixture.doc.textContent).toBe('![doc](a.pdf)<!-- {"width":300,"height":400} -->')
+    })
+    await expect.element(box).toHaveAttribute('data-width', '300')
+    await expect.element(box).toHaveAttribute('data-height', '400')
+    expect(embed.element.isConnected).toBe(true)
+  })
+
+  it('rewrites the wiki size suffix when resized', async () => {
+    const { embed } = hostEmbed()
+    using fixture = setupEmbed('![[a.pdf]]', () => embed)
+    await expect.element(box).toBeInTheDocument()
+    box
+      .element()
+      .dispatchEvent(new CustomEvent('resizeEnd', { detail: { width: 300, height: 400 } }))
+    await vi.waitFor(() => {
+      expect(fixture.doc.textContent).toBe('![[a.pdf|300x400]]')
+    })
+  })
+
+  it('reserves a box of the persisted size while pending, then fills it in place', async () => {
+    const { embed } = hostEmbed()
+    const { promise, resolve } = deferredEmbed()
+    using fixture = setupEmbed('![doc](a.pdf)<!-- {"width":300,"height":400} -->', () => promise)
+    void fixture
+    await expect.element(box).toHaveAttribute('data-loading', '')
+    await expect.element(box).toHaveAttribute('data-width', '300')
+    await expect.element(box).toHaveAttribute('data-height', '400')
+    expect(box.getByTestId('host-content').elements()).toHaveLength(0)
+    const reserved = box.element()
+
+    resolve(embed)
+    await expect.element(box.getByTestId('host-content')).toBeInTheDocument()
+    expect(box.element()).toBe(reserved)
+    await expect.element(box).not.toHaveAttribute('data-loading')
+  })
+
+  it('drops the reserved box when the Promise resolves to undefined', async () => {
+    const { promise, resolve } = deferredEmbed()
+    using fixture = setupEmbed('![doc](a.pdf)<!-- {"width":300,"height":400} -->', () => promise)
+    await expect.element(box).toBeInTheDocument()
+
+    resolve(undefined)
+    await expect.element(box).not.toBeInTheDocument()
+    expect(fixture.doc.textContent).toBe('![doc](a.pdf)<!-- {"width":300,"height":400} -->')
+  })
+
+  it('destroys the content when the embed leaves the document', async () => {
+    const { embed, destroy } = hostEmbed()
+    using fixture = setupEmbed('![doc](a.pdf)', () => embed)
+    await expect.element(box).toBeInTheDocument()
+    expect(destroy).not.toHaveBeenCalled()
+
+    fixture.set(fixture.n.doc(fixture.n.paragraph('gone')))
+    await vi.waitFor(() => expect(destroy).toHaveBeenCalledOnce())
+  })
+
+  it('destroys content that resolves after its view was destroyed', async () => {
+    const { embed, destroy } = hostEmbed()
+    const { promise, resolve } = deferredEmbed()
+    using fixture = setupEmbed('![doc](a.pdf)', () => promise)
+    fixture.set(fixture.n.doc(fixture.n.paragraph('gone')))
+
+    resolve(embed)
+    await vi.waitFor(() => expect(destroy).toHaveBeenCalledOnce())
+    expect(embed.element.isConnected).toBe(false)
   })
 })

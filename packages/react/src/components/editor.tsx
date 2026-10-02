@@ -200,6 +200,15 @@ export interface EditorProps {
   resolveImageUrl?: ImageOptions['resolveImageUrl']
 
   /**
+   * Renders an image `src` as host content (an element plus its intrinsic
+   * size) in the image's resizable box instead of an `<img>`, consulted before
+   * `resolveImageUrl`. Return `undefined` synchronously to defer to
+   * `resolveImageUrl`. Resizing keeps the content's aspect ratio. Pass a
+   * stable function (e.g. from `useCallback`).
+   */
+  resolveEmbed?: ImageOptions['resolveEmbed']
+
+  /**
    * Claims a `[label](url)` link as a file: a claimed link renders as an
    * inline pill (file icon, name, size) instead of a link, behaves as one
    * caret unit, and reports clicks through `onFileClick` instead of
@@ -263,8 +272,9 @@ export interface EditorProps {
 
   /**
    * Persists a pasted/dropped file and returns its markdown destination,
-   * inserted as `![](src)` for an image and as a `[name](src)` link for any
-   * other file. Return `undefined` to decline. Pass a stable function.
+   * inserted as `![](src)` for a file `shouldEmbedFile` accepts (by default an
+   * image) and as a `[name](src)` link for any other file. Return `undefined`
+   * to decline. Pass a stable function.
    */
   onFilePaste?: FilePasteOptions['onFilePaste']
 
@@ -272,6 +282,19 @@ export interface EditorProps {
    * Called when persisting a pasted/dropped file throws.
    */
   onFileSaveError?: FilePasteOptions['onFileSaveError']
+
+  /**
+   * Chooses which pasted, dropped, or attached files embed as `![](src)`.
+   * Defaults to `isImageFile`. Pass a stable function.
+   */
+  shouldEmbedFile?: FilePasteOptions['shouldEmbedFile']
+
+  /**
+   * Titles a blank document from the first file pasted or dropped into it:
+   * the empty leading heading takes the returned title and the files land
+   * after it. Omit to insert files where they land. Pass a stable function.
+   */
+  titleFromFile?: FilePasteOptions['titleFromFile']
 
   /**
    * Called when the user clicks a rendered image (or presses `Enter` on a
@@ -436,6 +459,7 @@ export function MeowdownEditor({
   onTagClick,
   onExitBoundary,
   resolveImageUrl,
+  resolveEmbed,
   resolveFileLink,
   resolveWikiEmbed,
   resolveWikilink,
@@ -446,6 +470,8 @@ export function MeowdownEditor({
   onFileClick,
   onFilePaste,
   onFileSaveError,
+  shouldEmbedFile,
+  titleFromFile,
   onImageClick,
   onXPostMediaClick,
   onYouTubeVideoClick,
@@ -588,6 +614,7 @@ export function MeowdownEditor({
         onTagClick={onTagClick}
         onExitBoundary={onExitBoundary}
         resolveImageUrl={resolveImageUrl}
+        resolveEmbed={resolveEmbed}
         resolveFileLink={resolveFileLink}
         resolveWikiEmbed={resolveWikiEmbed}
         resolveWikilink={resolveWikilink}
@@ -598,6 +625,8 @@ export function MeowdownEditor({
         onFileClick={onFileClick}
         onFilePaste={onFilePaste}
         onFileSaveError={onFileSaveError}
+        shouldEmbedFile={shouldEmbedFile}
+        titleFromFile={titleFromFile}
         onImageClick={onImageClick}
         onXPostMediaClick={onXPostMediaClick}
         onYouTubeVideoClick={onYouTubeVideoClick}

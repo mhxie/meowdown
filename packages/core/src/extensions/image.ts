@@ -42,9 +42,48 @@ import { formatSizedWikiEmbed, parseWikiEmbed } from './wiki-embed.ts'
 export type ImageUrlResolver = (src: string) => string | undefined | Promise<string | undefined>
 
 /**
+ * Host content shown in an embed's resizable box in place of an `<img>`.
+ */
+export interface HostEmbed {
+  /**
+   * The element placed in the resizable box. It is stretched to fill the box.
+   */
+  element: HTMLElement
+  /**
+   * Intrinsic width in CSS pixels. With `height`, it locks the box's aspect
+   * ratio and sizes an embed that has no persisted size, by the same rules as
+   * an image's natural size.
+   */
+  width: number
+  /**
+   * Intrinsic height in CSS pixels.
+   */
+  height: number
+  /**
+   * Called once when the preview is torn down: the embed leaves the document,
+   * its `src` changes, or it resolves after its view was already destroyed.
+   */
+  destroy?: () => void
+}
+
+/**
+ * Renders an image `src` as host content instead of an `<img>`. Return
+ * `undefined` synchronously to defer to `resolveImageUrl`. A `Promise` claims
+ * the source: while it is pending, a persisted size reserves the box, and a
+ * rejection or an `undefined` result leaves the source without a preview.
+ */
+export type EmbedResolver = (src: string) => HostEmbed | undefined | Promise<HostEmbed | undefined>
+
+/**
  * Options for {@link defineImage}.
  */
 export interface ImageOptions {
+  /**
+   * Render an image `src` as host content (for example a document preview) in
+   * the image's resizable box, consulted before `resolveImageUrl`. Resizing
+   * keeps the content's aspect ratio and persists the size like an image's.
+   */
+  resolveEmbed?: EmbedResolver
   /**
    * Map a markdown `src` to a displayable URL, or `undefined` to skip rendering
    * that image. May return a `Promise`; while it is pending, an image whose
@@ -92,13 +131,14 @@ function applySize(root: HTMLElement, width: number | null, height: number | nul
 
 /**
  * Write the display size onto the resizable root. Persisted dimensions win;
- * missing ones derive from the image's natural size (capping the height at
- * MAX_DISPLAY_HEIGHT, never upscaling). Before the image has loaded, only the
- * persisted dimensions are seeded; the load listener fills in the rest.
+ * missing ones derive from the natural size (capping the height at
+ * MAX_DISPLAY_HEIGHT, never upscaling). An unknown natural size (an image that
+ * has not loaded yet) seeds only the persisted dimensions.
  */
-function applyImageDisplaySize(
+function applyDisplaySize(
   root: HTMLElement,
-  image: HTMLImageElement,
+  naturalWidth: number,
+  naturalHeight: number,
   width: number | null,
   height: number | null,
 ): void {
@@ -106,15 +146,28 @@ function applyImageDisplaySize(
     applySize(root, width, height)
     return
   }
-  const ratio = image.naturalWidth / image.naturalHeight
+  const ratio = naturalWidth / naturalHeight
   if (!Number.isFinite(ratio) || ratio <= 0) {
     applySize(root, width, height)
     return
   }
-  const displayHeight =
-    width == null ? Math.min(image.naturalHeight, MAX_DISPLAY_HEIGHT) : width / ratio
+  const displayHeight = width == null ? Math.min(naturalHeight, MAX_DISPLAY_HEIGHT) : width / ratio
   const displayWidth = width ?? displayHeight * ratio
   applySize(root, displayWidth, displayHeight)
+}
+
+/**
+ * {@link applyDisplaySize} from an `<img>`'s natural size. Before the image has
+ * loaded, only the persisted dimensions are seeded; the load listener fills in
+ * the rest.
+ */
+function applyImageDisplaySize(
+  root: HTMLElement,
+  image: HTMLImageElement,
+  width: number | null,
+  height: number | null,
+): void {
+  applyDisplaySize(root, image.naturalWidth, image.naturalHeight, width, height)
 }
 
 /**
@@ -227,6 +280,7 @@ class ImageMarkView implements MarkView {
   readonly #dom: HTMLElement
   readonly #contentDOM: HTMLElement
   readonly #view: EditorView
+  #resolveEmbed: EmbedResolver | undefined
   #resolveImageUrl: ImageUrlResolver | undefined
   #resolveXPost: XPostResolver
   #mediaUrlProtocols: string[] | undefined
@@ -234,11 +288,13 @@ class ImageMarkView implements MarkView {
   #attrs: MdImageAttrs
   #resizableRoot: HTMLElement | undefined
   #image: HTMLImageElement | undefined
+  #embed: HostEmbed | undefined
   #destroyed = false
 
   constructor(mark: Mark, view: EditorView, options: ImageOptions) {
     this.#attrs = mark.attrs as MdImageAttrs
     this.#view = view
+    this.#resolveEmbed = options.resolveEmbed
     this.#resolveImageUrl = options.resolveImageUrl
     this.#resolveXPost = options.resolveXPost ?? defaultResolveXPost
     this.#mediaUrlProtocols = options.mediaUrlProtocols
@@ -279,6 +335,9 @@ class ImageMarkView implements MarkView {
     if (this.#resizableRoot && (next.width !== previous.width || next.height !== previous.height)) {
       if (this.#image) {
         applyImageDisplaySize(this.#resizableRoot, this.#image, next.width, next.height)
+      } else if (this.#embed) {
+        const { width, height } = this.#embed
+        applyDisplaySize(this.#resizableRoot, width, height, next.width, next.height)
       } else {
         applySize(this.#resizableRoot, next.width, next.height)
       }
@@ -292,12 +351,15 @@ class ImageMarkView implements MarkView {
 
   destroy(): void {
     this.#destroyed = true
+    this.#embed?.destroy?.()
+    this.#embed = undefined
   }
 
   /**
-   * Mount the inline preview for the image `src`, if any: a post-embed card, a
-   * resizable `<img>`, or, while an asynchronous resolver is pending and the
-   * size is persisted, an empty box of that size that the image later fills.
+   * Mount the inline preview for the image `src`, if any: a post-embed card,
+   * resizable host content, a resizable `<img>`, or, while an asynchronous
+   * resolver is pending and the size is persisted, an empty box of that size
+   * that the content later fills.
    */
   #mountPreview(): void {
     const { src } = this.#attrs
@@ -308,6 +370,21 @@ class ImageMarkView implements MarkView {
       wrapper.dataset.postEmbed = kind
       wrapper.appendChild(this.#buildPostEmbed(kind, src))
       this.#insertPreview(wrapper)
+      return
+    }
+
+    const embed = this.#resolveEmbed?.(src)
+    if (embed instanceof Promise) {
+      const placeholder = this.#hasPersistedSize() ? this.#renderHostEmbed(null) : undefined
+      if (placeholder) this.#insertPreview(placeholder)
+      void embed.then(
+        (resolvedEmbed) => this.#settleHostEmbed(placeholder, resolvedEmbed),
+        () => this.#settleHostEmbed(placeholder, undefined),
+      )
+      return
+    }
+    if (embed) {
+      this.#insertPreview(this.#renderHostEmbed(embed))
       return
     }
 
@@ -350,6 +427,27 @@ class ImageMarkView implements MarkView {
     }
   }
 
+  /**
+   * {@link #settle} for an asynchronous `resolveEmbed`. Content that arrives
+   * after the view was destroyed is handed straight back to its `destroy`.
+   */
+  #settleHostEmbed(placeholder: HTMLElement | undefined, embed: HostEmbed | undefined): void {
+    if (this.#destroyed) {
+      embed?.destroy?.()
+      return
+    }
+    if (!embed) {
+      placeholder?.remove()
+      this.#resizableRoot = undefined
+      return
+    }
+    if (placeholder && this.#resizableRoot) {
+      this.#attachHostEmbed(this.#resizableRoot, embed)
+    } else {
+      this.#insertPreview(this.#renderHostEmbed(embed))
+    }
+  }
+
   #createWrapper(): HTMLElement {
     const wrapper = document.createElement('span')
     wrapper.className = 'md-image-view-preview md-atom-view-preview'
@@ -372,6 +470,21 @@ class ImageMarkView implements MarkView {
     const wrapper = this.#createWrapper()
     wrapper.dataset.testid = 'image-preview'
     wrapper.appendChild(this.#buildResizableImage(url))
+    return wrapper
+  }
+
+  /**
+   * The resizable host-content preview. `null` builds the sized box without its
+   * content, for an asynchronous `resolveEmbed` to fill through
+   * `#attachHostEmbed`.
+   */
+  #renderHostEmbed(embed: HostEmbed | null): HTMLElement {
+    const wrapper = this.#createWrapper()
+    wrapper.dataset.testid = 'host-embed-preview'
+    wrapper.dataset.hostEmbed = ''
+    const root = this.#buildSizedRoot('host-embed-resizable')
+    if (embed) this.#attachHostEmbed(root, embed)
+    wrapper.appendChild(root)
     return wrapper
   }
 
@@ -456,14 +569,26 @@ class ImageMarkView implements MarkView {
    * attributes.
    */
   #buildResizableImage(url: string | null): HTMLElement {
+    const root = this.#buildSizedRoot('image-resizable')
+    if (url != null) this.#attachImage(root, url)
+    return root
+  }
+
+  /**
+   * The sized, resizable box shared by images and host content: ProseKit's
+   * resizable web component with a drag handle, seeded with the persisted size.
+   * Releasing a drag persists the new width and height (see
+   * `#buildResizableImage`).
+   */
+  #buildSizedRoot(testid: string): HTMLElement {
     registerResizableRootElement()
     registerResizableHandleElement()
 
     const root = document.createElement('prosekit-resizable-root')
     root.className = 'md-image-resizable'
-    root.dataset.testid = 'image-resizable'
-    // Show a placeholder background until the image paints, so a freshly dropped,
-    // not-yet-loaded image still fills a visible box. Removed on load/error.
+    root.dataset.testid = testid
+    // Show a placeholder background until the content paints, so a freshly
+    // dropped, not-yet-loaded image still fills a visible box.
     root.setAttribute('data-loading', '')
     // A persisted size is known up front, so seed both dimensions before the
     // image loads (or before there is an image at all). This gives the box its
@@ -484,8 +609,25 @@ class ImageMarkView implements MarkView {
     })
 
     this.#resizableRoot = root
-    if (url != null) this.#attachImage(root, url)
     return root
+  }
+
+  /**
+   * Put host content into a resizable root built by `#buildSizedRoot`, in
+   * front of its handle, and lock the box to the content's aspect ratio.
+   */
+  #attachHostEmbed(root: HTMLElement, embed: HostEmbed): void {
+    const ratio = embed.width / embed.height
+    if (Number.isFinite(ratio) && ratio > 0) {
+      root.setAttribute('data-aspect-ratio', String(ratio))
+    }
+    applyDisplaySize(root, embed.width, embed.height, this.#attrs.width, this.#attrs.height)
+    const content = document.createElement('span')
+    content.className = 'md-host-embed-content'
+    content.appendChild(embed.element)
+    root.prepend(content)
+    root.removeAttribute('data-loading')
+    this.#embed = embed
   }
 
   /**
