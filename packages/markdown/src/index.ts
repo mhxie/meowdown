@@ -29,6 +29,8 @@ export type {
   MarkdownListItem,
   MarkdownNode,
   MarkdownParagraph,
+  MarkdownPosition,
+  MarkdownPositioned,
   MarkdownTable,
   MarkdownTableCell,
   MarkdownTableRow,
