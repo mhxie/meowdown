@@ -82,6 +82,11 @@ interface SlashMenuProps {
    * Called when an attached file fails to persist. See `EditorProps.onFileSaveError`.
    */
   onFileSaveError?: FilePasteOptions['onFileSaveError']
+
+  /**
+   * Chooses which attached files embed. See `EditorProps.shouldEmbedFile`.
+   */
+  shouldEmbedFile?: FilePasteOptions['shouldEmbedFile']
 }
 
 // Hoisted so its identity is stable across renders, as useEditorDerivedValue
@@ -95,6 +100,7 @@ export function SlashMenu({
   onSlashMenuSearch,
   onFilePaste,
   onFileSaveError,
+  shouldEmbedFile,
 }: SlashMenuProps): ReactElement {
   const editor = useEditor<EditorExtension>()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -145,7 +151,7 @@ export function SlashMenu({
       for (const file of files) {
         try {
           const destination = await onFilePaste(file)
-          if (destination) markdown.push(buildFileMarkdown(file, destination))
+          if (destination) markdown.push(buildFileMarkdown(file, destination, shouldEmbedFile))
         } catch (error) {
           onSaveError(error, file)
         }
@@ -155,7 +161,7 @@ export function SlashMenu({
       editor.focus()
       editor.commands.insertText({ text: markdown.join('\n') })
     },
-    [editor, onFilePaste, onFileSaveError],
+    [editor, onFilePaste, onFileSaveError, shouldEmbedFile],
   )
 
   return (

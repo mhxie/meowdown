@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { docToMarkdown } from '../converters/pm-to-md.ts'
 import { setupFixture, type Fixture } from '../testing/index.ts'
 
-import { buildFileMarkdown, type FilePasteOptions } from './file-paste.ts'
+import { buildFileMarkdown, isImageFile, type FilePasteOptions } from './file-paste.ts'
 
 // An editor with the file paste extension configured with the given handlers.
 function setup(options: FilePasteOptions, text = ''): Fixture {
@@ -105,6 +105,79 @@ describe('file paste', () => {
   })
 })
 
+describe('shouldEmbedFile', () => {
+  const embedPdfs: FilePasteOptions['shouldEmbedFile'] = (file) => {
+    return isImageFile(file) || file.name.toLowerCase().endsWith('.pdf')
+  }
+
+  it('embeds a pasted file the predicate accepts', async () => {
+    using fixture = setup({
+      onFilePaste: (file) => `saved://${file.name}`,
+      shouldEmbedFile: embedPdfs,
+    })
+    pasteFiles(fixture.view, [pdf('report.pdf')])
+    await vi.waitFor(() => {
+      expect(fixture.doc.textContent).toBe('![](saved://report.pdf)')
+    })
+  })
+
+  it('links a dropped file the predicate rejects', async () => {
+    using fixture = setup(
+      { onFilePaste: (file) => `saved://${file.name}`, shouldEmbedFile: () => false },
+      'ab',
+    )
+    dropFiles(fixture.view, [png('cat.png')], 2)
+    await vi.waitFor(() => {
+      expect(fixture.doc.textContent).toBe('a[cat.png](saved://cat.png)b')
+    })
+  })
+})
+
+describe('titleFromFile', () => {
+  const titleFromFile = (file: { name: string }): string => file.name.replace(/\.[^.]+$/, '')
+
+  it('titles a blank document from the first dropped file and puts the files after the heading', async () => {
+    using fixture = setupFixture({
+      extensionOptions: { onFilePaste: (file) => `saved://${file.name}`, titleFromFile },
+    })
+    const { n } = fixture
+    fixture.set(n.doc(n.heading({ level: 1 }, '')))
+    dropFiles(fixture.view, [pdf('Q3 Report.pdf'), png('chart.png')], 1)
+    await vi.waitFor(() => {
+      expect(docToMarkdown(fixture.doc)).toBe(
+        '# Q3 Report\n\n[Q3 Report.pdf](saved://Q3 Report.pdf)\n![](saved://chart.png)\n',
+      )
+    })
+  })
+
+  it('leaves a document with any text where the file lands', async () => {
+    using fixture = setupFixture({
+      extensionOptions: { onFilePaste: (file) => `saved://${file.name}`, titleFromFile },
+    })
+    const { n } = fixture
+    fixture.set(n.doc(n.heading({ level: 1 }, ''), n.paragraph('ab')))
+    dropFiles(fixture.view, [pdf('notes.pdf')], 4)
+    await vi.waitFor(() => {
+      expect(docToMarkdown(fixture.doc)).toBe('#\n\na[notes.pdf](saved://notes.pdf)b\n')
+    })
+  })
+
+  it('leaves the heading alone when the file gives no title', async () => {
+    using fixture = setupFixture({
+      extensionOptions: {
+        onFilePaste: (file) => `saved://${file.name}`,
+        titleFromFile: () => '  ',
+      },
+    })
+    const { n } = fixture
+    fixture.set(n.doc(n.heading({ level: 1 }, '')))
+    pasteFiles(fixture.view, [pdf('a.pdf')])
+    await vi.waitFor(() => {
+      expect(fixture.doc.textContent).toBe('[a.pdf](saved://a.pdf)')
+    })
+  })
+})
+
 describe('file drop', () => {
   it('inserts the link at the drop position', async () => {
     using fixture = setup({ onFilePaste: (file) => `saved://${file.name}` }, 'AB')
@@ -186,6 +259,16 @@ describe('buildFileMarkdown', () => {
     expect(buildFileMarkdown({ name: 'a.pdf' }, 'assets/a.pdf')).toBe('[a.pdf](assets/a.pdf)')
     expect(buildFileMarkdown({ name: 'image.tiff' }, 'assets/image.tiff')).toBe(
       '[image.tiff](assets/image.tiff)',
+    )
+  })
+
+  it('embeds whatever a host predicate accepts', () => {
+    const embedPdfs = (file: { name: string }): boolean => file.name.endsWith('.pdf')
+    expect(buildFileMarkdown({ name: 'a.pdf' }, 'assets/a.pdf', embedPdfs)).toBe(
+      '![](assets/a.pdf)',
+    )
+    expect(buildFileMarkdown({ name: 'cat.png' }, 'assets/cat.png', embedPdfs)).toBe(
+      '[cat.png](assets/cat.png)',
     )
   })
 

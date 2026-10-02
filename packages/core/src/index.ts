@@ -49,7 +49,10 @@ export {
 export {
   buildFileMarkdown,
   defineFilePaste,
+  isImageFile,
+  type FileEmbedPredicate,
   type FilePasteHandler,
+  type FileTitleResolver,
   type FilePasteOptions,
   type FileSaveErrorHandler,
 } from './extensions/file-paste.ts'
@@ -71,6 +74,8 @@ export {
 export {
   defaultResolveImageUrl,
   defineImage,
+  type EmbedResolver,
+  type HostEmbed,
   type ImageOptions,
   type ImageUrlResolver,
 } from './extensions/image.ts'

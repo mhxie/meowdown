@@ -218,6 +218,11 @@ export interface ProseKitEditorProps {
   resolveImageUrl?: ImageOptions['resolveImageUrl']
 
   /**
+   * Renders an image `src` as host content. See `EditorProps.resolveEmbed`.
+   */
+  resolveEmbed?: ImageOptions['resolveEmbed']
+
+  /**
    * Claims links as file pills. Updates existing content; see `EditorProps.resolveFileLink`.
    */
   resolveFileLink?: FileLinkResolver
@@ -263,6 +268,16 @@ export interface ProseKitEditorProps {
    * Called when a pasted/dropped file fails to persist. See `EditorProps.onFileSaveError`.
    */
   onFileSaveError?: FilePasteOptions['onFileSaveError']
+
+  /**
+   * Chooses which saved files embed. See `EditorProps.shouldEmbedFile`.
+   */
+  shouldEmbedFile?: FilePasteOptions['shouldEmbedFile']
+
+  /**
+   * Titles a blank document from its first saved file. See `EditorProps.titleFromFile`.
+   */
+  titleFromFile?: FilePasteOptions['titleFromFile']
 
   /**
    * Called on click of a rendered image. See `EditorProps.onImageClick`.
@@ -377,6 +392,7 @@ export function ProseKitEditor({
   onTagClick,
   onExitBoundary,
   resolveImageUrl,
+  resolveEmbed,
   resolveFileLink,
   resolveWikiEmbed,
   resolveWikilink,
@@ -387,6 +403,8 @@ export function ProseKitEditor({
   onFileClick,
   onFilePaste,
   onFileSaveError,
+  shouldEmbedFile,
+  titleFromFile,
   onImageClick,
   onXPostMediaClick,
   onYouTubeVideoClick,
@@ -434,6 +452,7 @@ export function ProseKitEditor({
       onTagClick,
       onExitBoundary,
       resolveImageUrl,
+      resolveEmbed,
       resolveFileInfo,
       resolveXPost,
       mediaUrlProtocols,
@@ -441,6 +460,8 @@ export function ProseKitEditor({
       onFileClick,
       onFilePaste,
       onFileSaveError,
+      shouldEmbedFile,
+      titleFromFile,
       onImageClick,
       onXPostMediaClick,
       onYouTubeVideoClick,
@@ -465,6 +486,7 @@ export function ProseKitEditor({
       onTagClick,
       onExitBoundary,
       resolveImageUrl,
+      resolveEmbed,
       resolveFileInfo,
       resolveXPost,
       mediaUrlProtocols,
@@ -472,6 +494,8 @@ export function ProseKitEditor({
       onFileClick,
       onFilePaste,
       onFileSaveError,
+      shouldEmbedFile,
+      titleFromFile,
       onImageClick,
       onXPostMediaClick,
       onYouTubeVideoClick,
@@ -686,6 +710,7 @@ export function ProseKitEditor({
         onSlashMenuSearch={onSlashMenuSearch}
         onFilePaste={onFilePaste}
         onFileSaveError={onFileSaveError}
+        shouldEmbedFile={shouldEmbedFile}
       />
       <LinkMenu
         key={String(readOnly)}

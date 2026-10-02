@@ -987,12 +987,28 @@
       border-radius: var(--meowdown-image-radius, 0.5rem);
     }
 
-    .md-image-resizable img {
+    /* Direct children only: host content may hold its own images. */
+    .md-image-resizable > img {
       display: block;
       width: 100%;
       height: 100%;
       object-fit: contain;
       border-radius: var(--meowdown-image-radius, 0.5rem);
+    }
+
+    /* Host content from `resolveEmbed` fills the box, clipped to its corners. */
+    .md-host-embed-content {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: var(--meowdown-image-radius, 0.5rem);
+    }
+
+    .md-host-embed-content > * {
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
     }
 
     .md-image-resize-handle {
