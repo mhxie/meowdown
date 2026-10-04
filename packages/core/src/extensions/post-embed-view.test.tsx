@@ -1,6 +1,8 @@
 import type { XPostMediaClickEvent } from '@meowdown/embed/x'
 import type { YouTubeVideoClickEvent } from '@meowdown/embed/youtube'
+import { sleep } from '@ocavue/utils'
 import type { XPost } from '@post-embed/types'
+import { pasteText } from '@prosekit/core/test'
 import { describe, expect, it, vi } from 'vitest'
 import { page, userEvent } from 'vitest/browser'
 
@@ -10,6 +12,7 @@ import { createTweet } from '../testing/tweet-fixture.ts'
 import { createXPost } from '../testing/x-post-fixture.ts'
 import { createYouTubeVideo } from '../testing/youtube-fixture.ts'
 
+import { updateEditorConfig } from './editor-config.ts'
 import type { EditorExtensionOptions } from './extension.ts'
 import type { ImageOptions } from './image.ts'
 import { formatMagicComment, parseMagicComment } from './magic-comment.ts'
@@ -352,5 +355,117 @@ describe('YouTube video resize', () => {
     endResize(320)
     await expect.element(videoResizable).toHaveAttribute('data-width', '320')
     expect(docToMarkdown(editor.state.doc).trim()).toBe(`${VIDEO}<!-- {"width":320} -->`)
+  })
+})
+
+// With remote media off, an embed shows its source URL instead of a card: no
+// saved snapshot renders, no resolver runs, and nothing is loaded.
+describe('remote media off', () => {
+  const VIDEO_URL = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ'
+  const embedLink = pmRoot.getByTestId('embed-link')
+  // A saved card whose poster would load from the network if it rendered.
+  const savedVideo = `${VIDEO}${formatMagicComment({
+    snapshot: {
+      kind: 'youtube-video',
+      data: { ...createYouTubeVideo(), thumbnail_url: 'https://i.ytimg.com/vi/aqz-KE-bpKQ/0.jpg' },
+    },
+  })}`
+
+  function expectNothingRemote(): void {
+    expect(document.querySelector('img[src^="https:"], img[src^="http:"], iframe')).toBeNull()
+    expect(document.querySelector('meowdown-embed-x, meowdown-embed-youtube')).toBeNull()
+  }
+
+  it('shows a saved YouTube snapshot as its source URL', async () => {
+    const resolveYouTubeVideo = vi.fn(() => createYouTubeVideo())
+    using fixture = setup(savedVideo, { resolveYouTubeVideo, remoteMedia: false })
+    await expect.element(embedLink).toHaveTextContent(VIDEO_URL)
+    expectNothingRemote()
+    expect(resolveYouTubeVideo).not.toHaveBeenCalled()
+    // The source, snapshot included, is untouched.
+    expect(docToMarkdown(fixture.editor.state.doc).trim()).toBe(savedVideo)
+  })
+
+  it('shows an X post as its source URL', async () => {
+    const resolveXPost = vi.fn(() => createXPost())
+    using fixture = setup(TWEET, { resolveXPost, remoteMedia: false })
+    void fixture
+    await expect.element(embedLink).toHaveTextContent('https://x.com/jack/status/20')
+    expectNothingRemote()
+    expect(resolveXPost).not.toHaveBeenCalled()
+  })
+
+  it('never fetches through the default resolvers', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    try {
+      using fixture = setup(`${TWEET} ${VIDEO}`, { remoteMedia: false })
+      void fixture
+      await expect.element(embedLink.nth(1)).toHaveTextContent(VIDEO_URL)
+      expectNothingRemote()
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
+  it('shows an embed link pasted during the session as its source URL', async () => {
+    const resolveYouTubeVideo = vi.fn(() => createYouTubeVideo())
+    using fixture = setupFixture({
+      extensionOptions: { embedPaste: true, resolveYouTubeVideo, remoteMedia: false },
+    })
+    const { editor, n, view } = fixture
+    fixture.set(n.doc(n.paragraph('<a>')))
+    pasteText(view, VIDEO_URL)
+    expect(docToMarkdown(editor.state.doc).trim()).toBe(VIDEO)
+    await expect.element(embedLink).toHaveTextContent(VIDEO_URL)
+    expectNothingRemote()
+    expect(resolveYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it('shows a snapshot pasted during the session as its source URL', async () => {
+    const resolveYouTubeVideo = vi.fn(() => createYouTubeVideo())
+    using fixture = setupFixture({ extensionOptions: { resolveYouTubeVideo, remoteMedia: false } })
+    const { n, view } = fixture
+    fixture.set(n.doc(n.paragraph('<a>')))
+    pasteText(view, savedVideo)
+    await expect.element(embedLink).toHaveTextContent(VIDEO_URL)
+    expectNothingRemote()
+    expect(resolveYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it('re-renders mounted embeds when the setting changes', async () => {
+    const resolveXPost = vi.fn(() => createXPost())
+    using fixture = setup(TWEET, { resolveXPost })
+    const { editor } = fixture
+    await expect.element(xPostCard.getByText('just setting up my twttr')).toBeInTheDocument()
+
+    updateEditorConfig(editor, { resolveXPost, remoteMedia: false })
+    await expect.element(embedLink).toHaveTextContent('https://x.com/jack/status/20')
+    expectNothingRemote()
+    const calls = resolveXPost.mock.calls.length
+
+    updateEditorConfig(editor, { resolveXPost, remoteMedia: true })
+    await expect.element(xPostCard.getByText('just setting up my twttr')).toBeInTheDocument()
+    expect(embedLink.query()).toBeNull()
+    expect(resolveXPost.mock.calls.length).toBe(calls + 1)
+  })
+
+  it('drops a resolver answer that lands after the card was turned off', async () => {
+    let settle!: (video: ReturnType<typeof createYouTubeVideo>) => void
+    const pending = new Promise<ReturnType<typeof createYouTubeVideo>>((resolve) => {
+      settle = resolve
+    })
+    using fixture = setup(VIDEO, { resolveYouTubeVideo: () => pending })
+    const { editor } = fixture
+    await expect.element(videoCard.locate('[data-fallback][data-pending]')).toBeInTheDocument()
+
+    updateEditorConfig(editor, { remoteMedia: false })
+    await expect.element(embedLink).toBeInTheDocument()
+    settle(createYouTubeVideo())
+    await pending
+    await sleep(0)
+    // The late answer is not persisted as a snapshot and mounts no card.
+    expect(docToMarkdown(editor.state.doc).trim()).toBe(VIDEO)
+    expectNothingRemote()
   })
 })

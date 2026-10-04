@@ -19,6 +19,7 @@ const refreshKeys = new Set<keyof EditorConfig>([
   'readOnly',
   'spellCheck',
   'editorClassName',
+  'remoteMedia',
 ] as const)
 
 export function updateEditorConfig(

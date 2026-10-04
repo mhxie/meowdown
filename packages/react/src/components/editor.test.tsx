@@ -280,6 +280,37 @@ describe('MeowdownEditor', () => {
     await expect.element(pmRoot.getByTestId('youtube-video-embed')).not.toBeInTheDocument()
   })
 
+  it('shows embeds as their source URLs while remoteMedia is off, without remounting', async () => {
+    const url = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ'
+    const resolveYouTubeVideo = vi.fn(() => createYouTubeVideo())
+    const ref = createRef<EditorHandle>()
+    const screen = await render(
+      <MeowdownEditor
+        handleRef={ref}
+        initialMarkdown={`![](${url})`}
+        resolveYouTubeVideo={resolveYouTubeVideo}
+        remoteMedia={false}
+      />,
+    )
+    const editor = ref.current?.getEditor()
+    await expect.element(pmRoot.getByTestId('embed-link')).toHaveTextContent(url)
+    expect(pmRoot.getByTestId('youtube-video-embed').query()).toBeNull()
+    expect(resolveYouTubeVideo).not.toHaveBeenCalled()
+
+    await screen.rerender(
+      <MeowdownEditor
+        handleRef={ref}
+        initialMarkdown={`![](${url})`}
+        resolveYouTubeVideo={resolveYouTubeVideo}
+      />,
+    )
+    await expect
+      .element(pmRoot.getByTestId('youtube-video-embed'))
+      .toMatchTextContent('Big Buck Bunny')
+    expect(pmRoot.getByTestId('embed-link').query()).toBeNull()
+    expect(ref.current?.getEditor()).toBe(editor)
+  })
+
   it('starts a bullet on Enter after a heading when bulletAfterHeading is on', async () => {
     const ref = createRef<EditorHandle>()
     await render(<MeowdownEditor handleRef={ref} bulletAfterHeading initialMarkdown="# Title" />)

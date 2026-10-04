@@ -13,6 +13,7 @@ import {
   type Fixture,
 } from '../testing/index.ts'
 
+import { updateEditorConfig } from './editor-config.ts'
 import type { ImageClickHandler } from './image-click.ts'
 import type { EmbedResolver, HostEmbed, ImageUrlResolver } from './image.ts'
 import type { MarkMode } from './mark-mode.ts'
@@ -788,5 +789,73 @@ describe('host embeds', () => {
     resolve(embed)
     await vi.waitFor(() => expect(destroy).toHaveBeenCalledOnce())
     expect(embed.element.isConnected).toBe(false)
+  })
+})
+
+// A `remoteMedia` change re-renders every image, so a host resolver that
+// follows the same switch is asked again; other configuration changes keep the
+// existing views (see editor-config.test.tsx).
+describe('re-rendering when remoteMedia changes', () => {
+  const box = pmRoot.getByTestId('host-embed-resizable')
+
+  it('asks the image resolver again for existing images', async () => {
+    let allowed = true
+    const resolveImageUrl = vi.fn((src: string) => {
+      return allowed && src === 'photo.png' ? getSVGImageURL(10, 10) : undefined
+    })
+    using fixture = setupFixture({ extensionOptions: { resolveImageUrl } })
+    const { editor, n } = fixture
+    fixture.set(n.doc(n.paragraph('![cat](photo.png)')))
+    await expect.element(pmRoot.getByAltText('cat')).toBeInTheDocument()
+
+    allowed = false
+    updateEditorConfig(editor, { resolveImageUrl, remoteMedia: false })
+    await expect.element(pmRoot.getByAltText('cat')).not.toBeInTheDocument()
+
+    allowed = true
+    updateEditorConfig(editor, { resolveImageUrl, remoteMedia: true })
+    await expect.element(pmRoot.getByAltText('cat')).toBeInTheDocument()
+    expect(resolveImageUrl).toHaveBeenCalledTimes(3)
+  })
+
+  it('destroys host content and renders it again', async () => {
+    const destroy = vi.fn()
+    const resolveEmbed = vi.fn((): HostEmbed => {
+      const element = document.createElement('div')
+      element.dataset.testid = 'host-content'
+      return { element, width: 600, height: 800, destroy }
+    })
+    using fixture = setupFixture({ extensionOptions: { resolveEmbed } })
+    const { editor, n } = fixture
+    fixture.set(n.doc(n.paragraph('![doc](a.pdf)')))
+    await expect.element(box.getByTestId('host-content')).toBeInTheDocument()
+
+    updateEditorConfig(editor, { resolveEmbed, remoteMedia: false })
+    await vi.waitFor(() => expect(destroy).toHaveBeenCalledOnce())
+    await expect.element(box.getByTestId('host-content')).toBeInTheDocument()
+    expect(resolveEmbed).toHaveBeenCalledTimes(2)
+    expect(box.elements()).toHaveLength(1)
+  })
+
+  it('drops an answer that was pending when the image re-rendered', async () => {
+    const stale = getSVGImageURL(10, 10)
+    const fresh = getSVGImageURL(20, 20)
+    const settles: ((url: string | undefined) => void)[] = []
+    const resolveImageUrl = () => {
+      return new Promise<string | undefined>((resolve) => {
+        settles.push(resolve)
+      })
+    }
+    using fixture = setupFixture({ extensionOptions: { resolveImageUrl } })
+    const { editor, n } = fixture
+    fixture.set(n.doc(n.paragraph('![cat](photo.png)')))
+    await vi.waitFor(() => expect(settles).toHaveLength(1))
+
+    updateEditorConfig(editor, { resolveImageUrl, remoteMedia: false })
+    await vi.waitFor(() => expect(settles).toHaveLength(2))
+    settles[0]?.(stale)
+    settles[1]?.(fresh)
+    await expect.element(pmRoot.getByAltText('cat')).toHaveAttribute('src', fresh)
+    expect(pmRoot.getByAltText('cat').elements()).toHaveLength(1)
   })
 })

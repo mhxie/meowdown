@@ -300,6 +300,11 @@ export interface ProseKitEditorProps {
   embedPaste?: boolean
 
   /**
+   * Renders tweet/YouTube embeds as cards. See `EditorProps.remoteMedia`.
+   */
+  remoteMedia?: boolean
+
+  /**
    * Wraps the selection as a link on URL paste. See `EditorProps.linkPaste`.
    */
   linkPaste?: boolean
@@ -409,6 +414,7 @@ export function ProseKitEditor({
   onXPostMediaClick,
   onYouTubeVideoClick,
   embedPaste,
+  remoteMedia,
   linkPaste,
   bulletAfterHeading,
   substitution = true,
@@ -466,6 +472,7 @@ export function ProseKitEditor({
       onXPostMediaClick,
       onYouTubeVideoClick,
       embedPaste,
+      remoteMedia,
       linkPaste,
       bulletAfterHeading,
       substitution,
@@ -500,6 +507,7 @@ export function ProseKitEditor({
       onXPostMediaClick,
       onYouTubeVideoClick,
       embedPaste,
+      remoteMedia,
       linkPaste,
       bulletAfterHeading,
       substitution,

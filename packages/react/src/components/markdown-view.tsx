@@ -140,6 +140,13 @@ export interface MarkdownViewProps {
    */
   interactive?: boolean
   /**
+   * Render recognized tweet and YouTube embeds as cards. Defaults to `true`.
+   * When `false`, an embed shows its source URL as plain text: no saved
+   * snapshot is rendered, no resolver is called, and nothing is loaded.
+   * Images still go through `resolveImageUrl`.
+   */
+  remoteMedia?: boolean
+  /**
    * Render collapsed (`+`) bullets expanded, ignoring their fold state at any
    * depth. Off by default. For views that show slices of a note (e.g. a
    * backlinks panel), where the source's fold state must not hide the content
@@ -228,6 +235,7 @@ export interface MarkdownViewProps {
 interface BlockContext {
   inline: boolean
   interactive: boolean
+  remoteMedia: boolean
   expandCollapsed: boolean
   resolveImageUrl?: ImageUrlResolver
   resolveFileLink?: FileLinkResolver
@@ -389,6 +397,7 @@ function ImagePreview(props: {
   resolveYouTubeVideo?: YouTubeVideoResolver
   onImageClick?: ImageClickHandler
   interactive: boolean
+  remoteMedia: boolean
 }): ReactElement | null {
   const {
     src,
@@ -402,6 +411,7 @@ function ImagePreview(props: {
     resolveYouTubeVideo,
     onImageClick,
     interactive,
+    remoteMedia,
   } = props
   const kind = matchEmbed(src)
   // Resolved before the embed branch so the hook count is stable; an embed
@@ -413,6 +423,18 @@ function ImagePreview(props: {
   const url = useMaybePromise(resolved)
   if (kind) {
     if (!interactive) return null
+    if (!remoteMedia) {
+      return (
+        <span
+          className="md-image-view-preview md-atom-view-preview"
+          data-testid="embed-link"
+          data-embed-link=""
+          contentEditable={false}
+        >
+          {src}
+        </span>
+      )
+    }
     return (
       <PostEmbed
         key={src}
@@ -499,6 +521,7 @@ function ImageView(props: {
         resolveYouTubeVideo={context.resolveYouTubeVideo}
         onImageClick={context.onImageClick}
         interactive={context.interactive}
+        remoteMedia={context.remoteMedia}
       />
       <span className="md-image-view-content md-atom-view-content">{children}</span>
     </span>
@@ -1007,6 +1030,7 @@ export function MarkdownView({
   markMode = 'hide',
   frontmatter = false,
   interactive = true,
+  remoteMedia = true,
   expandCollapsed = false,
   resolveImageUrl,
   resolveFileLink,
@@ -1029,6 +1053,7 @@ export function MarkdownView({
     () => ({
       inline,
       interactive,
+      remoteMedia,
       expandCollapsed,
       resolveImageUrl,
       resolveFileLink,
@@ -1047,6 +1072,7 @@ export function MarkdownView({
     [
       inline,
       interactive,
+      remoteMedia,
       expandCollapsed,
       resolveImageUrl,
       resolveFileLink,

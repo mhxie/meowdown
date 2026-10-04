@@ -963,6 +963,17 @@
       overflow: visible;
     }
 
+    /* Without remote media an embed shows its source URL, styled like the
+     * URL of a link, in place of the card. */
+    .md-image-view-preview[data-embed-link] {
+      border-radius: 0;
+      color: var(--meowdown-accent);
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 2px;
+      overflow-wrap: anywhere;
+    }
+
     .md-image-resizable {
       position: relative;
       display: inline-block;

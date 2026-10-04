@@ -330,6 +330,14 @@ export interface EditorProps {
   embedPaste?: boolean
 
   /**
+   * Renders tweet and YouTube embeds as cards. On by default. When `false`,
+   * an embed shows its source URL as plain text: no saved snapshot is
+   * rendered, no resolver is called, and nothing is loaded. Images still go
+   * through `resolveImageUrl`. Changing it re-renders every image and embed.
+   */
+  remoteMedia?: boolean
+
+  /**
    * Pasting a URL over selected text wraps the selection as a Markdown link
    * `[selected text](url)`; one undo restores the plain text. On by default.
    */
@@ -476,6 +484,7 @@ export function MeowdownEditor({
   onXPostMediaClick,
   onYouTubeVideoClick,
   embedPaste = true,
+  remoteMedia = true,
   linkPaste = true,
   bulletAfterHeading = false,
   substitution = true,
@@ -631,6 +640,7 @@ export function MeowdownEditor({
         onXPostMediaClick={onXPostMediaClick}
         onYouTubeVideoClick={onYouTubeVideoClick}
         embedPaste={embedPaste}
+        remoteMedia={remoteMedia}
         linkPaste={linkPaste}
         bulletAfterHeading={bulletAfterHeading}
         substitution={substitution}

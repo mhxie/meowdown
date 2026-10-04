@@ -2,9 +2,9 @@ import { registerXPost, type Resolver } from '@meowdown/embed/x'
 import { registerYouTubeVideo } from '@meowdown/embed/youtube'
 import { matchEmbed, type EmbedKind } from '@meowdown/markdown'
 import type { XPost, YouTubeVideo } from '@post-embed/types'
-import { defineMarkView, type PlainExtension } from '@prosekit/core'
+import { defineMarkView, definePlugin, union, type PlainExtension } from '@prosekit/core'
 import type { Mark } from '@prosekit/pm/model'
-import type { EditorState } from '@prosekit/pm/state'
+import { Plugin, PluginKey, type EditorState } from '@prosekit/pm/state'
 import type { EditorView, MarkView, ViewMutationRecord } from '@prosekit/pm/view'
 import {
   registerResizableHandleElement,
@@ -107,6 +107,15 @@ export interface ImageOptions {
    * which reads YouTube's oEmbed endpoint.
    */
   resolveYouTubeVideo?: YouTubeVideoResolver
+  /**
+   * Render X post and YouTube embeds as cards. Defaults to `true`. When
+   * `false`, an embed shows its source URL as plain text instead: no saved
+   * snapshot is rendered, no resolver is called, and nothing is loaded.
+   * Images still go through `resolveImageUrl`, so a host that must not load
+   * remote images filters there too. Changing it re-renders every image and
+   * embed, so a resolver that follows the same switch is asked again.
+   */
+  remoteMedia?: boolean
 }
 
 /**
@@ -276,29 +285,36 @@ function commitSnapshot(
   )
 }
 
+function isRemoteMediaEnabled(options: ImageOptions | undefined): boolean {
+  return options?.remoteMedia ?? true
+}
+
+/**
+ * The live image mark views of each editor view, so a `remoteMedia` change can
+ * re-render them (a configuration change alone never rebuilds a mark view).
+ */
+const imageViews = new WeakMap<EditorView, Set<ImageMarkView>>()
+
 class ImageMarkView implements MarkView {
   readonly #dom: HTMLElement
   readonly #contentDOM: HTMLElement
   readonly #view: EditorView
-  #resolveEmbed: EmbedResolver | undefined
-  #resolveImageUrl: ImageUrlResolver | undefined
-  #resolveXPost: XPostResolver
-  #mediaUrlProtocols: string[] | undefined
-  #resolveYouTubeVideo: YouTubeVideoResolver
+  #options: ImageOptions
   #attrs: MdImageAttrs
   #resizableRoot: HTMLElement | undefined
   #image: HTMLImageElement | undefined
   #embed: HostEmbed | undefined
   #destroyed = false
+  /**
+   * Bumped whenever the preview is torn down, so an asynchronous answer for
+   * an earlier preview is dropped instead of landing in the current one.
+   */
+  #renderToken = 0
 
   constructor(mark: Mark, view: EditorView, options: ImageOptions) {
     this.#attrs = mark.attrs as MdImageAttrs
     this.#view = view
-    this.#resolveEmbed = options.resolveEmbed
-    this.#resolveImageUrl = options.resolveImageUrl
-    this.#resolveXPost = options.resolveXPost ?? defaultResolveXPost
-    this.#mediaUrlProtocols = options.mediaUrlProtocols
-    this.#resolveYouTubeVideo = options.resolveYouTubeVideo ?? defaultResolveYouTubeVideo
+    this.#options = options
 
     this.#dom = document.createElement('span')
     this.#dom.className = 'md-image-view md-atom-view'
@@ -312,10 +328,34 @@ class ImageMarkView implements MarkView {
 
     this.#dom.appendChild(this.#contentDOM)
     this.#mountPreview()
+
+    let views = imageViews.get(view)
+    if (!views) {
+      views = new Set()
+      imageViews.set(view, views)
+    }
+    views.add(this)
   }
 
   get dom(): HTMLElement {
     return this.#dom
+  }
+
+  /**
+   * The `remoteMedia` setting the current preview was rendered with.
+   */
+  get remoteMedia(): boolean {
+    return isRemoteMediaEnabled(this.#options)
+  }
+
+  /**
+   * Tear down the current preview and render it again from `options`.
+   */
+  refresh(options: ImageOptions): void {
+    if (this.#destroyed) return
+    this.#teardownPreview()
+    this.#options = options
+    this.#mountPreview()
   }
 
   get contentDOM(): HTMLElement {
@@ -353,18 +393,42 @@ class ImageMarkView implements MarkView {
     this.#destroyed = true
     this.#embed?.destroy?.()
     this.#embed = undefined
+    imageViews.get(this.#view)?.delete(this)
   }
 
   /**
-   * Mount the inline preview for the image `src`, if any: a post-embed card,
-   * resizable host content, a resizable `<img>`, or, while an asynchronous
-   * resolver is pending and the size is persisted, an empty box of that size
-   * that the content later fills.
+   * Remove the preview in front of the source, destroying host content, and
+   * drop any answer still pending for it.
+   */
+  #teardownPreview(): void {
+    this.#renderToken++
+    this.#embed?.destroy?.()
+    this.#embed = undefined
+    this.#image = undefined
+    this.#resizableRoot = undefined
+    for (const child of Array.from(this.#dom.children)) {
+      if (child !== this.#contentDOM) child.remove()
+    }
+  }
+
+  /**
+   * Mount the inline preview for the image `src`, if any: a post-embed card
+   * (or, without remote media, its source as plain text), resizable host
+   * content, a resizable `<img>`, or, while an asynchronous resolver is
+   * pending and the size is persisted, an empty box of that size that the
+   * content later fills.
    */
   #mountPreview(): void {
     const { src } = this.#attrs
+    const token = this.#renderToken
     const kind = matchEmbed(src)
     if (kind) {
+      // An embed never falls through to the image path: the default image
+      // resolver would load its page URL as an `<img>`.
+      if (!isRemoteMediaEnabled(this.#options)) {
+        this.#insertPreview(this.#renderEmbedLink(src))
+        return
+      }
       const wrapper = this.#createWrapper()
       wrapper.dataset.testid = `${kind}-embed`
       wrapper.dataset.postEmbed = kind
@@ -373,13 +437,13 @@ class ImageMarkView implements MarkView {
       return
     }
 
-    const embed = this.#resolveEmbed?.(src)
+    const embed = this.#options.resolveEmbed?.(src)
     if (embed instanceof Promise) {
       const placeholder = this.#hasPersistedSize() ? this.#renderHostEmbed(null) : undefined
       if (placeholder) this.#insertPreview(placeholder)
       void embed.then(
-        (resolvedEmbed) => this.#settleHostEmbed(placeholder, resolvedEmbed),
-        () => this.#settleHostEmbed(placeholder, undefined),
+        (resolvedEmbed) => this.#settleHostEmbed(token, placeholder, resolvedEmbed),
+        () => this.#settleHostEmbed(token, placeholder, undefined),
       )
       return
     }
@@ -388,19 +452,27 @@ class ImageMarkView implements MarkView {
       return
     }
 
-    const resolved = (this.#resolveImageUrl ?? defaultResolveImageUrl)(src)
+    const resolved = (this.#options.resolveImageUrl ?? defaultResolveImageUrl)(src)
     if (resolved instanceof Promise) {
       // Only a fully persisted size can reserve the box; a lone width cannot
       // tell the height before the image loads.
       const placeholder = this.#hasPersistedSize() ? this.#renderImage(null) : undefined
       if (placeholder) this.#insertPreview(placeholder)
       void resolved.then(
-        (url) => this.#settle(placeholder, url),
-        () => this.#settle(placeholder, undefined),
+        (url) => this.#settle(token, placeholder, url),
+        () => this.#settle(token, placeholder, undefined),
       )
       return
     }
     if (resolved) this.#insertPreview(this.#renderImage(resolved))
+  }
+
+  /**
+   * Whether an asynchronous answer started under `token` may still change the
+   * preview: the view is alive and the preview was not rebuilt since.
+   */
+  #isCurrent(token: number): boolean {
+    return !this.#destroyed && token === this.#renderToken
   }
 
   #hasPersistedSize(): boolean {
@@ -411,10 +483,10 @@ class ImageMarkView implements MarkView {
    * Apply a resolver's asynchronous answer: fill the placeholder with the
    * image, mount the image from scratch, or drop the placeholder when there is
    * nothing to show. A view destroyed in the meantime (its `src` changed, or it
-   * left the document) ignores the answer.
+   * left the document) or re-rendered since ignores the answer.
    */
-  #settle(placeholder: HTMLElement | undefined, url: string | undefined): void {
-    if (this.#destroyed) return
+  #settle(token: number, placeholder: HTMLElement | undefined, url: string | undefined): void {
+    if (!this.#isCurrent(token)) return
     if (!url) {
       placeholder?.remove()
       this.#resizableRoot = undefined
@@ -429,10 +501,15 @@ class ImageMarkView implements MarkView {
 
   /**
    * {@link #settle} for an asynchronous `resolveEmbed`. Content that arrives
-   * after the view was destroyed is handed straight back to its `destroy`.
+   * after the view was destroyed or re-rendered is handed straight back to its
+   * `destroy`.
    */
-  #settleHostEmbed(placeholder: HTMLElement | undefined, embed: HostEmbed | undefined): void {
-    if (this.#destroyed) {
+  #settleHostEmbed(
+    token: number,
+    placeholder: HTMLElement | undefined,
+    embed: HostEmbed | undefined,
+  ): void {
+    if (!this.#isCurrent(token)) {
       embed?.destroy?.()
       return
     }
@@ -489,6 +566,18 @@ class ImageMarkView implements MarkView {
   }
 
   /**
+   * An embed's source as plain text, for `remoteMedia: false`: no card, so
+   * nothing is resolved or loaded.
+   */
+  #renderEmbedLink(src: string): HTMLElement {
+    const wrapper = this.#createWrapper()
+    wrapper.dataset.testid = 'embed-link'
+    wrapper.dataset.embedLink = ''
+    wrapper.textContent = src
+    return wrapper
+  }
+
+  /**
    * Resolve X cards from their URL; YouTube cards may reuse a saved snapshot.
    */
   #buildPostEmbed(kind: EmbedKind, src: string): HTMLElement {
@@ -497,8 +586,8 @@ class ImageMarkView implements MarkView {
     if (kind === 'x-post') {
       registerXPost()
       const element = document.createElement('meowdown-embed-x')
-      element.mediaUrlProtocols = this.#mediaUrlProtocols ?? null
-      element.resolver = this.#resolveXPost
+      element.mediaUrlProtocols = this.#options.mediaUrlProtocols ?? null
+      element.resolver = this.#options.resolveXPost ?? defaultResolveXPost
       element.url = src
       return element
     }
@@ -506,7 +595,10 @@ class ImageMarkView implements MarkView {
     const element = document.createElement('meowdown-embed-youtube')
     element.playback = 'inline'
     element.data = saved?.kind === 'youtube-video' ? saved.data : null
-    element.resolver = this.#persisting(kind, this.#resolveYouTubeVideo)
+    element.resolver = this.#persisting(
+      kind,
+      this.#options.resolveYouTubeVideo ?? defaultResolveYouTubeVideo,
+    )
     element.url = src
     return this.#buildResizableVideo(element)
   }
@@ -514,14 +606,15 @@ class ImageMarkView implements MarkView {
   /**
    * Wrap a resolver so its first valid answer is persisted under `kind`.
    * post-embed only calls it while `data` is null, and logs a rejection
-   * itself.
+   * itself. An answer for a card that was re-rendered since is dropped.
    */
   #persisting<T extends XPost | YouTubeVideo>(kind: EmbedKind, resolver: Resolver<T>): Resolver<T> {
+    const token = this.#renderToken
     return (url) => {
       const result = resolver(url)
       void Promise.resolve(result).then(
         (value) => {
-          if (this.#destroyed || value == null) return
+          if (!this.#isCurrent(token) || value == null) return
           const snapshot = parsePostEmbedSnapshot({ kind, data: value })
           if (snapshot) commitSnapshot(this.#view, this.#contentDOM, url, snapshot)
         },
@@ -656,6 +749,38 @@ class ImageMarkView implements MarkView {
   }
 }
 
+const imageRefreshKey = new PluginKey('meowdown-image-refresh')
+
+/**
+ * Re-render every image mark view whose preview was built under a different
+ * `remoteMedia` setting than the current one. The configuration is mutated in
+ * place, so the plugin remembers the last value it acted on instead of
+ * comparing states.
+ */
+function defineImageRefresh(
+  getOptions?: (state: EditorState) => ImageOptions | undefined,
+): PlainExtension {
+  return definePlugin(
+    new Plugin({
+      key: imageRefreshKey,
+      view: (view) => {
+        let remoteMedia = isRemoteMediaEnabled(getOptions?.(view.state))
+        return {
+          update: (currentView) => {
+            const options = getOptions?.(currentView.state) ?? {}
+            const next = isRemoteMediaEnabled(options)
+            if (next === remoteMedia) return
+            remoteMedia = next
+            for (const markView of imageViews.get(currentView) ?? []) {
+              if (markView.remoteMedia !== next) markView.refresh(options)
+            }
+          },
+        }
+      },
+    }),
+  )
+}
+
 /**
  * Inline image/embed rendering: a mark view on the `mdImage` mark. Images
  * render in place from their literal Markdown source. Drag a rendered image's
@@ -666,8 +791,11 @@ class ImageMarkView implements MarkView {
 export function defineImage(
   getOptions?: (state: EditorState) => ImageOptions | undefined,
 ): PlainExtension {
-  return defineMarkView({
-    name: 'mdImage' satisfies MarkName,
-    constructor: (mark, view) => new ImageMarkView(mark, view, getOptions?.(view.state) ?? {}),
-  }) as PlainExtension
+  return union(
+    defineMarkView({
+      name: 'mdImage' satisfies MarkName,
+      constructor: (mark, view) => new ImageMarkView(mark, view, getOptions?.(view.state) ?? {}),
+    }) as PlainExtension,
+    defineImageRefresh(getOptions),
+  )
 }

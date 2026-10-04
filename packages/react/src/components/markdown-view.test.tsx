@@ -389,6 +389,46 @@ describe('MarkdownView', () => {
     expect(getComputedStyle(card.element()).width).toBe('320px')
   })
 
+  it('shows embeds as their source URLs when remoteMedia is false', async () => {
+    const tweet = 'https://x.com/jack/status/20'
+    const video = 'https://youtu.be/aqz-KE-bpKQ'
+    // A saved card whose poster would load from the network if it rendered.
+    const snapshot = {
+      kind: 'youtube-video',
+      data: { ...createYouTubeVideo(), thumbnail_url: 'https://i.ytimg.com/vi/aqz-KE-bpKQ/0.jpg' },
+    }
+    const resolveXPost = vi.fn(() => createXPost())
+    const resolveYouTubeVideo = vi.fn(() => createYouTubeVideo())
+    const resolveImageUrl = vi.fn((src: string) => src)
+    const markdown = `![](${tweet})\n\n![](${video})<!-- ${JSON.stringify({ snapshot })} -->`
+    const screen = await renderView(markdown, {
+      remoteMedia: false,
+      resolveXPost,
+      resolveYouTubeVideo,
+      resolveImageUrl,
+    })
+
+    const links = view.getByTestId('embed-link')
+    await expect.element(links.first()).toHaveTextContent(tweet)
+    await expect.element(links.last()).toHaveTextContent(video)
+    const root = view.element()
+    expect(root.querySelector('img, iframe, meowdown-embed-x, meowdown-embed-youtube')).toBeNull()
+    expect(resolveXPost).not.toHaveBeenCalled()
+    expect(resolveYouTubeVideo).not.toHaveBeenCalled()
+    expect(resolveImageUrl).not.toHaveBeenCalled()
+
+    // Turned back on, the same view renders the cards.
+    await screen.rerender(
+      <div data-testid="markdown-view">
+        <MarkdownView markdown={`![](${tweet})`} resolveXPost={resolveXPost} />
+      </div>,
+    )
+    await expect
+      .element(view.getByTestId('x-post-embed').locate('[data-meowdown-embed="x"]'))
+      .toMatchTextContent('just setting up my twttr')
+    expect(links.query()).toBeNull()
+  })
+
   it('omits recognized embeds before resolving images when interactive is false', async () => {
     const resolveImageUrl = vi.fn((src: string) => src)
     await renderView('![](https://x.com/jack/status/20)\n\n![](https://youtu.be/dQw4w9WgXcQ)', {
