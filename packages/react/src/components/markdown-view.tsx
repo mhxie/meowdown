@@ -71,6 +71,7 @@ import styles from './code-block-view.module.css'
 import { normalizeDOMOutputSpec, type TypedDOMOutputSpec } from './dom-output-spec.tsx'
 import { MathRender } from './math-render.tsx'
 import { MermaidRender } from './mermaid-render.tsx'
+import { noteEmbedFromRuns, type NoteEmbedRenderer } from './note-embed.ts'
 
 /**
  * Payload for {@link TaskClickHandler}.
@@ -133,6 +134,12 @@ export interface MarkdownViewProps {
    */
   frontmatter?: boolean
   /**
+   * Demote rendered headings by this many levels, capped at H6. Defaults to
+   * zero. Nonnegative integer offsets let an embedded document sit below its
+   * host without changing its Markdown, including setext headings.
+   */
+  headingOffset?: number
+  /**
    * Whether rendered links, images, file pills, and task checkboxes can be activated.
    * Defaults to `true`. When `false`, callbacks are ignored, the rendered tree
    * contains no anchors or focusable task controls, and recognized tweet and
@@ -168,6 +175,10 @@ export interface MarkdownViewProps {
    * Classify `![[target]]` as an image, file, or note; unresolved source stays literal.
    */
   resolveWikiEmbed?: WikiEmbedResolver
+  /**
+   * Render standalone note embeds as host content; omitted in passive views.
+   */
+  renderNoteEmbed?: NoteEmbedRenderer
   /**
    * Resolve a `[[...]]` wikilink into its target and chip label; the bracketed
    * text is both by default. Must be pure.
@@ -234,12 +245,14 @@ export interface MarkdownViewProps {
  */
 interface BlockContext {
   inline: boolean
+  headingOffset: number
   interactive: boolean
   remoteMedia: boolean
   expandCollapsed: boolean
   resolveImageUrl?: ImageUrlResolver
   resolveFileLink?: FileLinkResolver
   resolveWikiEmbed?: WikiEmbedResolver
+  renderNoteEmbed?: NoteEmbedRenderer
   resolveWikilink?: WikilinkResolver
   resolveFileInfo?: FileInfoResolver
   resolveXPost?: XPostResolver
@@ -268,6 +281,23 @@ interface RenderContext extends BlockContext {
   keyCounter: { value: number }
 }
 
+const HEADING_TAG = /^h[1-6]$/
+
+/**
+ * Clamp `headingOffset` to an integer from 0 to 5; a non-finite offset is 0.
+ */
+function normalizeHeadingOffset(offset: number): number {
+  return Number.isFinite(offset) ? Math.min(5, Math.max(0, Math.trunc(offset))) : 0
+}
+
+/**
+ * The heading tag `offset` levels deeper, capped at H6; other tags unchanged.
+ */
+function demoteHeadingTag(tag: string, offset: number): string {
+  if (offset === 0 || !HEADING_TAG.test(tag)) return tag
+  return `h${Math.min(6, Number(tag[1]) + offset)}`
+}
+
 /**
  * Convert a ProseMirror `DOMOutputSpec` into a React node, substituting `content`
  * for the spec's content hole (`0`). Reused for every node/mark spec the static
@@ -288,6 +318,7 @@ function outputSpecToReact(
   if (!normalized) return null
 
   const [tag, attrs, rest] = normalized
+  const renderedTag = demoteHeadingTag(tag, context.headingOffset)
   const reactProps = { ...attributesToProps(attrs, tag) }
   reactProps.key = `${key} ${JSON.stringify(attrs)}`
 
@@ -300,7 +331,7 @@ function outputSpecToReact(
   }
 
   const reactChildren = rest.map((child) => outputSpecToReact(child, content, context))
-  return createElement(tag, reactProps, ...reactChildren)
+  return createElement(renderedTag, reactProps, ...reactChildren)
 }
 
 function WikilinkChip(props: {
@@ -806,9 +837,12 @@ function renderRuns(
   return out
 }
 
-function renderInline(node: ProseMirrorNode, context: RenderContext): ReactNode {
+/**
+ * Parse a textblock's source into runs of text sharing one mark set.
+ */
+function parseInlineRuns(node: ProseMirrorNode, context: RenderContext): InlineRun[] {
   const text = node.textContent
-  if (!text) return null
+  if (!text) return []
   const chunks: readonly MarkChunk[] = inlineTextToMarkChunksWithContext(
     getMarkBuilders(),
     text,
@@ -821,10 +855,14 @@ function renderInline(node: ProseMirrorNode, context: RenderContext): ReactNode 
   )
   // Sort each chunk's marks into ProseMirror's canonical order so the grouping
   // and nesting match the editor.
-  const runs = chunks.map(([from, to, marks]): InlineRun => ({
+  return chunks.map(([from, to, marks]): InlineRun => ({
     text: text.slice(from, to),
     marks: Mark.setFrom(marks),
   }))
+}
+
+function renderInline(runs: InlineRun[], context: RenderContext): ReactNode {
+  if (runs.length === 0) return null
   return renderRuns(runs, 0, context)
 }
 
@@ -896,7 +934,25 @@ function renderBlock(
 
   const toDOM = node.type.spec.toDOM
   if (node.isTextblock) {
-    const inline = renderInline(node, context)
+    const runs = parseInlineRuns(node, context)
+    if (
+      typeName === 'paragraph' &&
+      context.interactive &&
+      !context.inline &&
+      context.renderNoteEmbed
+    ) {
+      const embed = noteEmbedFromRuns(runs)
+      if (embed) {
+        return (
+          <div key={key} className="md-note-embed-block">
+            <div className="md-note-embed-reader" contentEditable={false}>
+              {context.renderNoteEmbed(embed)}
+            </div>
+          </div>
+        )
+      }
+    }
+    const inline = renderInline(runs, context)
     return toDOM ? (
       outputSpecToReact(toDOM(node), inline, context)
     ) : (
@@ -1029,12 +1085,14 @@ export function MarkdownView({
   referenceDefinitions: suppliedDefinitions,
   markMode = 'hide',
   frontmatter = false,
+  headingOffset = 0,
   interactive = true,
   remoteMedia = true,
   expandCollapsed = false,
   resolveImageUrl,
   resolveFileLink,
   resolveWikiEmbed,
+  renderNoteEmbed,
   resolveWikilink,
   resolveFileInfo,
   resolveXPost,
@@ -1052,12 +1110,14 @@ export function MarkdownView({
   const context = useMemo<BlockContext>(
     () => ({
       inline,
+      headingOffset: normalizeHeadingOffset(headingOffset),
       interactive,
       remoteMedia,
       expandCollapsed,
       resolveImageUrl,
       resolveFileLink,
       resolveWikiEmbed,
+      renderNoteEmbed,
       resolveWikilink,
       resolveFileInfo,
       resolveXPost,
@@ -1071,12 +1131,14 @@ export function MarkdownView({
     }),
     [
       inline,
+      headingOffset,
       interactive,
       remoteMedia,
       expandCollapsed,
       resolveImageUrl,
       resolveFileLink,
       resolveWikiEmbed,
+      renderNoteEmbed,
       resolveWikilink,
       resolveFileInfo,
       resolveXPost,

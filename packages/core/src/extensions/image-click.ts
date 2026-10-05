@@ -18,17 +18,21 @@ interface ImageHit {
 
 /**
  * The image preview wrapper around `target`, or nothing when the wrapper holds
- * a post-embed card: its links and controls have their own click behavior.
+ * a post-embed card (its links and controls have their own click behavior) or
+ * an embed's plain source URL (`remoteMedia: false`), which is text, not an image.
  */
 function getClosestImagePreview(target: EventTarget | null): HTMLElement | undefined {
   if (!(target instanceof HTMLElement)) return
   const preview = target.closest<HTMLElement>('.md-image-view-preview')
-  if (!preview || preview.dataset.postEmbed != null) return
+  if (!preview || preview.dataset.postEmbed != null || preview.dataset.embedLink != null) return
   return preview
 }
 
+/**
+ * The preview's own `<img>`, never one nested inside host-rendered content.
+ */
 function getPreviewImage(preview: HTMLElement): HTMLImageElement | undefined {
-  return preview.querySelector('img') ?? undefined
+  return preview.querySelector<HTMLImageElement>(':scope > .md-image-resizable > img') ?? undefined
 }
 
 export function findImageAt(state: EditorState, pos: number): ImageHit | undefined {

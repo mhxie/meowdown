@@ -3,6 +3,7 @@ export {
   type MarkdownInlineViewProps,
 } from './components/markdown-inline-view.tsx'
 export { MeowdownEditor, type EditorMode, type EditorProps } from './components/editor.tsx'
+export type { NoteEmbedPayload, NoteEmbedRenderer } from './components/note-embed.ts'
 export {
   MarkdownView,
   type MarkdownViewProps,

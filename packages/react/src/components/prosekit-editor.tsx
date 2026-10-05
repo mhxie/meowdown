@@ -58,6 +58,8 @@ import { BlockHandle } from './block-handle.tsx'
 import { DropIndicator } from './drop-indicator.tsx'
 import { EditorExtensions } from './editor-extensions.tsx'
 import { LinkMenu } from './link-menu.tsx'
+import { NoteEmbedViews } from './note-embed-view.tsx'
+import type { NoteEmbedRenderer } from './note-embed.ts'
 import { PendingReplacementPreview } from './pending-replacement-preview.tsx'
 import { SelectionMenu } from './selection-menu.tsx'
 import { SlashMenu } from './slash-menu.tsx'
@@ -233,6 +235,11 @@ export interface ProseKitEditorProps {
   resolveWikiEmbed?: WikiEmbedResolver
 
   /**
+   * Render standalone note embeds; see `EditorProps.renderNoteEmbed`.
+   */
+  renderNoteEmbed?: NoteEmbedRenderer
+
+  /**
    * Resolves wikilink targets and labels. Updates existing content; see `EditorProps.resolveWikilink`.
    */
   resolveWikilink?: WikilinkResolver
@@ -400,6 +407,7 @@ export function ProseKitEditor({
   resolveEmbed,
   resolveFileLink,
   resolveWikiEmbed,
+  renderNoteEmbed,
   resolveWikilink,
   resolveFileInfo,
   resolveXPost,
@@ -710,6 +718,9 @@ export function ProseKitEditor({
         onDocChange={handleDocChange}
         onSearchChange={onSearchChange}
       />
+      {renderNoteEmbed && resolveWikiEmbed ? (
+        <NoteEmbedViews renderNoteEmbed={renderNoteEmbed} />
+      ) : null}
       {blockHandle && !readOnly && <BlockHandle />}
       {!readOnly && <TableHandle />}
       {blockHandle && !readOnly && <DropIndicator />}
