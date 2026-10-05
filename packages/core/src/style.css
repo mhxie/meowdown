@@ -1107,6 +1107,19 @@
 
   /* wikilink */
   .ProseMirror {
+    .md-note-embed-source {
+      margin: 0;
+      font-size: 0;
+      line-height: 0;
+      opacity: 0;
+    }
+
+    .md-note-embed-block:has(.md-atom-selected) > .md-note-embed-reader {
+      outline: 2px solid var(--meowdown-node-outline);
+      outline-offset: 2px;
+      border-radius: 6px;
+    }
+
     /* A plain inline, not the shared inline-block in .md-atom-view-preview */
     .md-wikilink-view-preview.md-atom-view-preview {
       display: inline;

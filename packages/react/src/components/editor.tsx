@@ -39,6 +39,7 @@ import {
 
 import type { TimeFormat } from '../utils/date-format.ts'
 
+import type { NoteEmbedRenderer } from './note-embed.ts'
 import { ProseKitEditor } from './prosekit-editor.tsx'
 import type {
   EditorHandle,
@@ -223,6 +224,11 @@ export interface EditorProps {
    * and editable. Must be pure; changing it reparses existing content.
    */
   resolveWikiEmbed?: WikiEmbedResolver
+
+  /**
+   * Render standalone note embeds without copying their content into the document.
+   */
+  renderNoteEmbed?: NoteEmbedRenderer
 
   /**
    * Resolves a `[[...]]` wikilink into the target its click and hover
@@ -470,6 +476,7 @@ export function MeowdownEditor({
   resolveEmbed,
   resolveFileLink,
   resolveWikiEmbed,
+  renderNoteEmbed,
   resolveWikilink,
   resolveFileInfo,
   resolveXPost,
@@ -626,6 +633,7 @@ export function MeowdownEditor({
         resolveEmbed={resolveEmbed}
         resolveFileLink={resolveFileLink}
         resolveWikiEmbed={resolveWikiEmbed}
+        renderNoteEmbed={renderNoteEmbed}
         resolveWikilink={resolveWikilink}
         resolveFileInfo={resolveFileInfo}
         resolveXPost={resolveXPost}

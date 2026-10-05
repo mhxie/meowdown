@@ -32,6 +32,39 @@ function renderView(markdown: string, props: Record<string, unknown> = {}) {
 }
 
 describe('MarkdownView', () => {
+  it('demotes real heading elements, including setext headings, while preserving code', async () => {
+    await renderView(
+      '# Title\n\n## Section\n\n### Detail\n\n#### Fourth\n\n##### Fifth\n\n###### Sixth\n\nSetext\n===\n\n```md\n# Literal\n```',
+      { headingOffset: 1 },
+    )
+    for (const [name, level] of [
+      ['Title', 2],
+      ['Section', 3],
+      ['Detail', 4],
+      ['Fourth', 5],
+      ['Fifth', 6],
+      ['Sixth', 6],
+      ['Setext', 2],
+    ] as const) {
+      await expect.element(view.getByRole('heading', { name, level })).toBeInTheDocument()
+    }
+    expect(view.element().querySelector('h1, h7')).toBeNull()
+    await expect.element(view.locate('pre code')).toHaveTextContent('# Literal')
+  })
+
+  it('updates the rendered heading depth without changing the source or other views', async () => {
+    const markdown = '# Title\n\n## Section'
+    const screen = await renderView(markdown, { headingOffset: 2 })
+    await expect.element(view.getByRole('heading', { name: 'Title', level: 3 })).toBeVisible()
+    await screen.rerender(
+      <div data-testid="markdown-view">
+        <MarkdownView markdown={markdown} />
+      </div>,
+    )
+    await expect.element(view.getByRole('heading', { name: 'Title', level: 1 })).toBeVisible()
+    await expect.element(view.getByRole('heading', { name: 'Section', level: 2 })).toBeVisible()
+  })
+
   it('renders inline marks as rich text, not source', async () => {
     await renderView('**bold** and *italic* and `code`')
     // The bug renders these as plain `**bold**` text with no element; rich

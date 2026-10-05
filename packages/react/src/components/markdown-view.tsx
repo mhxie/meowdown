@@ -71,6 +71,7 @@ import styles from './code-block-view.module.css'
 import { normalizeDOMOutputSpec, type TypedDOMOutputSpec } from './dom-output-spec.tsx'
 import { MathRender } from './math-render.tsx'
 import { MermaidRender } from './mermaid-render.tsx'
+import { standaloneNoteEmbed, type NoteEmbedRenderer } from './note-embed.ts'
 
 /**
  * Payload for {@link TaskClickHandler}.
@@ -133,6 +134,12 @@ export interface MarkdownViewProps {
    */
   frontmatter?: boolean
   /**
+   * Demote rendered headings by this many levels, capped at H6. Defaults to
+   * zero. Nonnegative integer offsets let an embedded document sit below its
+   * host without changing its Markdown, including setext headings.
+   */
+  headingOffset?: number
+  /**
    * Whether rendered links, images, file pills, and task checkboxes can be activated.
    * Defaults to `true`. When `false`, callbacks are ignored, the rendered tree
    * contains no anchors or focusable task controls, and recognized tweet and
@@ -168,6 +175,10 @@ export interface MarkdownViewProps {
    * Classify `![[target]]` as an image, file, or note; unresolved source stays literal.
    */
   resolveWikiEmbed?: WikiEmbedResolver
+  /**
+   * Render standalone note embeds as host content; omitted in passive views.
+   */
+  renderNoteEmbed?: NoteEmbedRenderer
   /**
    * Resolve a `[[...]]` wikilink into its target and chip label; the bracketed
    * text is both by default. Must be pure.
@@ -234,12 +245,14 @@ export interface MarkdownViewProps {
  */
 interface BlockContext {
   inline: boolean
+  headingOffset: number
   interactive: boolean
   remoteMedia: boolean
   expandCollapsed: boolean
   resolveImageUrl?: ImageUrlResolver
   resolveFileLink?: FileLinkResolver
   resolveWikiEmbed?: WikiEmbedResolver
+  renderNoteEmbed?: NoteEmbedRenderer
   resolveWikilink?: WikilinkResolver
   resolveFileInfo?: FileInfoResolver
   resolveXPost?: XPostResolver
@@ -288,6 +301,9 @@ function outputSpecToReact(
   if (!normalized) return null
 
   const [tag, attrs, rest] = normalized
+  const renderedTag = /^h[1-6]$/.test(tag)
+    ? `h${Math.min(6, Number(tag[1]) + context.headingOffset)}`
+    : tag
   const reactProps = { ...attributesToProps(attrs, tag) }
   reactProps.key = `${key} ${JSON.stringify(attrs)}`
 
@@ -300,7 +316,7 @@ function outputSpecToReact(
   }
 
   const reactChildren = rest.map((child) => outputSpecToReact(child, content, context))
-  return createElement(tag, reactProps, ...reactChildren)
+  return createElement(renderedTag, reactProps, ...reactChildren)
 }
 
 function WikilinkChip(props: {
@@ -894,6 +910,24 @@ function renderBlock(
     return renderCodeBlock(node, key)
   }
 
+  if (
+    typeName === 'paragraph' &&
+    context.interactive &&
+    !context.inline &&
+    context.renderNoteEmbed
+  ) {
+    const embed = standaloneNoteEmbed(node, context.resolveWikiEmbed)
+    if (embed) {
+      return (
+        <div key={key} className="md-note-embed-block">
+          <div className="md-note-embed-reader" contentEditable={false}>
+            {context.renderNoteEmbed(embed)}
+          </div>
+        </div>
+      )
+    }
+  }
+
   const toDOM = node.type.spec.toDOM
   if (node.isTextblock) {
     const inline = renderInline(node, context)
@@ -1029,12 +1063,14 @@ export function MarkdownView({
   referenceDefinitions: suppliedDefinitions,
   markMode = 'hide',
   frontmatter = false,
+  headingOffset = 0,
   interactive = true,
   remoteMedia = true,
   expandCollapsed = false,
   resolveImageUrl,
   resolveFileLink,
   resolveWikiEmbed,
+  renderNoteEmbed,
   resolveWikilink,
   resolveFileInfo,
   resolveXPost,
@@ -1052,12 +1088,16 @@ export function MarkdownView({
   const context = useMemo<BlockContext>(
     () => ({
       inline,
+      headingOffset: Number.isFinite(headingOffset)
+        ? Math.min(5, Math.max(0, Math.trunc(headingOffset)))
+        : 0,
       interactive,
       remoteMedia,
       expandCollapsed,
       resolveImageUrl,
       resolveFileLink,
       resolveWikiEmbed,
+      renderNoteEmbed,
       resolveWikilink,
       resolveFileInfo,
       resolveXPost,
@@ -1071,12 +1111,14 @@ export function MarkdownView({
     }),
     [
       inline,
+      headingOffset,
       interactive,
       remoteMedia,
       expandCollapsed,
       resolveImageUrl,
       resolveFileLink,
       resolveWikiEmbed,
+      renderNoteEmbed,
       resolveWikilink,
       resolveFileInfo,
       resolveXPost,
