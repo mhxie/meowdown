@@ -4,7 +4,11 @@ import { Plugin, PluginKey } from '@prosekit/pm/state'
 import type { EditorView } from '@prosekit/pm/view'
 
 import { forceReflow } from '../utils/force-reflow.ts'
-import { getIsTouchInput, onIsTouchInputChange } from '../utils/input-modality.ts'
+import {
+  getIsPointerSelection,
+  getIsTouchInput,
+  onIsTouchInputChange,
+} from '../utils/input-modality.ts'
 import { isAfterLineBreak } from '../utils/line-break.ts'
 
 import {
@@ -192,14 +196,15 @@ class VirtualCaretView implements PluginView {
       return
     }
 
-    // A reappearing caret must not glide in from its stale position.
-    if (wasHidden) this.#caret.style.transitionProperty = 'none'
+    // Pointer placement and a reappearing caret must reach their target immediately.
+    const skipGlide = wasHidden || getIsPointerSelection()
+    if (skipGlide) this.#caret.style.transitionProperty = 'none'
     this.#caret.style.visibility = ''
     this.#caret.style.left = `${rect.left}px`
     this.#caret.style.top = `${rect.top}px`
     this.#caret.style.height = `${rect.height}px`
     view.dom.setAttribute(DATA_ATTRIBUTE, '')
-    if (wasHidden) {
+    if (skipGlide) {
       forceReflow(this.#caret)
       this.#caret.style.transitionProperty = ''
     }
