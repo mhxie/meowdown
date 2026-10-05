@@ -209,7 +209,7 @@ describe('host note embeds', () => {
     expect(page.getByTestId('reader').element().closest('p')).toBeNull()
   })
 
-  it('does not call the host renderer in passive, inline, heading, or mixed-text views', async () => {
+  it('does not call the host renderer in passive, inline, heading, mixed-text, or multi-embed views', async () => {
     const renderer = vi.fn(renderNoteEmbed)
     await render(
       <>
@@ -226,14 +226,14 @@ describe('host note embeds', () => {
           renderNoteEmbed={renderer}
         />
         <MarkdownView
-          markdown={'# ![[Original]]\n\nBefore ![[Original]] after'}
+          markdown={'# ![[Original]]\n\nBefore ![[Original]] after\n\n![[One]] ![[Two]]'}
           resolveWikiEmbed={resolveWikiEmbed}
           renderNoteEmbed={renderer}
         />
       </>,
     )
     expect(renderer).not.toHaveBeenCalled()
-    await expect.element(page.getByTestId('wikilink')).toHaveLength(4)
+    await expect.element(page.getByTestId('wikilink')).toHaveLength(6)
   })
 
   it('keeps unresolved and attachment embeds on their original rendering paths', async () => {

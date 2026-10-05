@@ -307,6 +307,43 @@ describe('image click callback', () => {
     ])
     expect(onImageClick.mock.calls.map(([payload]) => payload.alt)).toEqual(['one', 'two'])
   })
+
+  it('ignores the plain source URL an embed shows when remoteMedia is off', async () => {
+    const onImageClick = vi.fn<ImageClickHandler>()
+    using fixture = setupFixture({ extensionOptions: { onImageClick, remoteMedia: false } })
+    const { n } = fixture
+    fixture.set(n.doc(n.paragraph('![](https://youtu.be/dQw4w9WgXcQ)')))
+    const link = pmRoot.getByTestId('embed-link')
+    await expect.element(link).toBeInTheDocument()
+
+    const pointerDown = new PointerEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      pointerType: 'touch',
+    })
+    link.element().dispatchEvent(pointerDown)
+    expect(pointerDown.defaultPrevented).toBe(false)
+    await userEvent.click(link)
+    expect(onImageClick).not.toHaveBeenCalled()
+  })
+
+  it('does not report an image nested inside host content as the clicked element', async () => {
+    const onImageClick = vi.fn<ImageClickHandler>()
+    const resolveEmbed: EmbedResolver = () => {
+      const element = document.createElement('div')
+      element.dataset.testid = 'host-content'
+      element.append(document.createElement('img'))
+      return { element, width: 200, height: 100 }
+    }
+    using fixture = setupFixture({ extensionOptions: { onImageClick, resolveEmbed } })
+    const { n } = fixture
+    fixture.set(n.doc(n.paragraph('![doc](a.pdf)')))
+    const content = pmRoot.getByTestId('host-content')
+    await expect.element(content).toBeInTheDocument()
+    await userEvent.click(content)
+    await vi.waitFor(() => expect(onImageClick).toHaveBeenCalledTimes(1))
+    expect(onImageClick.mock.calls[0][0].element).toBeUndefined()
+  })
 })
 
 // Releasing a resize rewrites only the trailing `<!-- {"width":N,"height":M} -->`

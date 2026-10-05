@@ -22,45 +22,52 @@ export function defineNoteEmbedParagraphs(mount: MountNoteEmbed): Extension {
       const payload = standaloneNoteEmbed(node)
       const spec = node.type.spec.toDOM
       if (!spec) throw new Error('A paragraph must define toDOM')
-      const { dom, contentDOM } = DOMSerializer.renderSpec(document, spec(node))
-      if (!(dom instanceof HTMLElement) || !contentDOM) {
+      const { dom: source, contentDOM } = DOMSerializer.renderSpec(document, spec(node))
+      if (!(source instanceof HTMLElement) || !contentDOM) {
         throw new Error('A paragraph must have an element and contentDOM')
       }
-      const source = dom
-      const root = payload ? document.createElement('div') : source
-      const reader = payload ? document.createElement('div') : null
-      let mounted: NoteEmbedMount | null = null
-      if (reader && payload) {
-        root.className = 'md-note-embed-block'
-        source.className = 'md-note-embed-source'
-        source.setAttribute('aria-hidden', 'true')
-        reader.className = 'md-note-embed-reader'
-        reader.contentEditable = 'false'
-        root.append(source, reader)
-        mounted = mount(reader, payload)
+      if (!payload) {
+        // An ordinary paragraph; rebuilt by `update` once it becomes an embed.
+        return {
+          dom: source,
+          contentDOM,
+          update: (next: ProseMirrorNode) => {
+            if (!next.sameMarkup(node) || standaloneNoteEmbed(next)) return false
+            node = next
+            return true
+          },
+        }
       }
+
+      const root = document.createElement('div')
+      root.className = 'md-note-embed-block'
+      source.classList.add('md-note-embed-source')
+      source.setAttribute('aria-hidden', 'true')
+      const reader = document.createElement('div')
+      reader.className = 'md-note-embed-reader'
+      reader.contentEditable = 'false'
+      root.append(source, reader)
+      const mounted = mount(reader, payload)
       return {
         dom: root,
         contentDOM,
         update: (next: ProseMirrorNode) => {
           if (!next.sameMarkup(node)) return false
           const nextPayload = standaloneNoteEmbed(next)
-          if (Boolean(nextPayload) !== Boolean(payload)) return false
+          if (!nextPayload) return false
           node = next
-          if (nextPayload) mounted?.update(nextPayload)
+          mounted.update(nextPayload)
           return true
         },
-        stopEvent: (event) => {
-          return event.target instanceof Node && reader?.contains(event.target) === true
-        },
+        stopEvent: (event) => event.target instanceof Node && reader.contains(event.target),
         ignoreMutation: (mutation) => {
           if (mutation.type === 'selection') {
             const anchor = document.getSelection()?.anchorNode
-            return anchor != null && reader?.contains(anchor) === true
+            return anchor != null && reader.contains(anchor)
           }
-          return reader?.contains(mutation.target) === true
+          return reader.contains(mutation.target)
         },
-        destroy: () => mounted?.destroy(),
+        destroy: () => mounted.destroy(),
       }
     },
   })

@@ -1,11 +1,5 @@
-import {
-  getMarkBuilders,
-  inlineTextToMarkChunksWithContext,
-  isMarkOfType,
-  type MdWikilinkAttrs,
-  type WikiEmbedResolver,
-} from '@meowdown/core'
-import type { Node as ProseMirrorNode } from '@prosekit/pm/model'
+import { isMarkOfType, type MdWikilinkAttrs } from '@meowdown/core'
+import type { Mark, Node as ProseMirrorNode } from '@prosekit/pm/model'
 import type { ReactNode } from 'react'
 
 /**
@@ -29,31 +23,46 @@ export interface NoteEmbedPayload {
  */
 export type NoteEmbedRenderer = (embed: NoteEmbedPayload) => ReactNode
 
-export function standaloneNoteEmbed(
-  node: ProseMirrorNode,
-  resolveWikiEmbed?: WikiEmbedResolver,
-): NoteEmbedPayload | undefined {
-  const source = node.textContent.trim()
-  if (!source.startsWith('![[') || !source.endsWith(']]')) return
+/**
+ * A paragraph's inline content as runs of text sharing one mark set.
+ */
+export interface NoteEmbedRun {
+  readonly text: string
+  readonly marks: readonly Mark[]
+}
+
+/**
+ * The note embed a paragraph consists of: exactly one `![[...]]` run carrying
+ * the `mdWikilink` mark that `resolveWikiEmbed` assigns to notes, with nothing
+ * but whitespace around it. Image and file embeds carry other marks, and an
+ * unresolved embed carries none, so both keep their ordinary rendering.
+ */
+export function noteEmbedFromRuns(runs: Iterable<NoteEmbedRun>): NoteEmbedPayload | undefined {
   let payload: NoteEmbedPayload | undefined
-  node.forEach((child) => {
-    if (!child.isText || child.text !== source) return
-    const mark = child.marks.find((mark) => isMarkOfType(mark, 'mdWikilink'))
-    if (!mark) return
+  for (const { text, marks } of runs) {
+    const mark = marks.find((mark) => isMarkOfType(mark, 'mdWikilink'))
+    if (!mark) {
+      if (text.trim()) return
+      continue
+    }
+    if (payload || !text.startsWith('![[') || !text.endsWith(']]')) return
     const { target, display } = mark.attrs as MdWikilinkAttrs
     payload = { target, display }
-  })
-  if (payload || !resolveWikiEmbed) return payload
-  // MarkdownView parses inline marks at render time; editor nodes already carry them.
-  const chunks = inlineTextToMarkChunksWithContext(
-    getMarkBuilders(),
-    source,
-    { resolveWikiEmbed },
-    { referenceDefinitions: new Map() },
-  )
-  if (chunks.length !== 1 || chunks[0][0] !== 0 || chunks[0][1] !== source.length) return
-  const mark = chunks[0][2].find((mark) => isMarkOfType(mark, 'mdWikilink'))
-  if (!mark) return
-  const { target, display } = mark.attrs as MdWikilinkAttrs
-  return { target, display }
+  }
+  return payload
+}
+
+/**
+ * The note embed an editor paragraph consists of; see {@link noteEmbedFromRuns}.
+ */
+export function standaloneNoteEmbed(node: ProseMirrorNode): NoteEmbedPayload | undefined {
+  // Cheap rejection first: this runs on every paragraph update.
+  if (!node.textContent.includes('![[')) return
+  const runs: NoteEmbedRun[] = []
+  for (const child of node.children) {
+    // A hard break or other inline node is not part of a standalone embed.
+    if (!child.isText) return
+    runs.push({ text: child.text ?? '', marks: child.marks })
+  }
+  return noteEmbedFromRuns(runs)
 }

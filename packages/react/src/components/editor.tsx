@@ -226,7 +226,10 @@ export interface EditorProps {
   resolveWikiEmbed?: WikiEmbedResolver
 
   /**
-   * Render standalone note embeds without copying their content into the document.
+   * Renders a paragraph that is only a `![[note]]` embed, classified as a note
+   * by `resolveWikiEmbed` (required), as a host reader beside its hidden
+   * source. The reader's content never enters the document or its Markdown.
+   * Embeds mixed into text stay chips. Pass a stable function.
    */
   renderNoteEmbed?: NoteEmbedRenderer
 
