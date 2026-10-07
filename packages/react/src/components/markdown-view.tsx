@@ -121,6 +121,9 @@ export interface MarkdownBlockRenderContext {
   readonly node: ProseMirrorNode
   /**
    * The full source document and this block's ProseMirror position within it.
+   * Use `doc` to locate the block (for example with `doc.resolve(position)`),
+   * not to read unrelated blocks: an unchanged block is not re-rendered when
+   * only blocks beyond its neighbors change.
    */
   readonly doc: ProseMirrorNode
   readonly position: number
@@ -150,7 +153,9 @@ export interface MarkdownBlockRenderContext {
 /**
  * Customize a block without changing its Markdown. Return `undefined` to use
  * the built-in presentation, or `null` to omit it. Must be pure; callbacks are
- * not a document-order traversal and rendered blocks can be memoized.
+ * not a document-order traversal and rendered blocks can be memoized. The result
+ * may depend only on the block, its position, and its neighboring blocks: a
+ * top-level block re-renders only when one of those changes.
  */
 export type MarkdownBlockRenderer = (context: MarkdownBlockRenderContext) => ReactNode | undefined
 
@@ -1189,7 +1194,8 @@ function nodesEqual(a: ProseMirrorNode | null, b: ProseMirrorNode | null): boole
 /**
  * One top-level block. Memoized on the block's own content (`Node.eq`), its
  * first checkbox index, the shared props object, and the definitions'
- * content. A custom renderer can also depend on the adjacent source blocks.
+ * content. A custom renderer can also depend on its position and the adjacent
+ * source blocks, but not on the rest of the reparsed document.
  */
 const MarkdownBlock = memo(
   function MarkdownBlock({
@@ -1219,8 +1225,7 @@ const MarkdownBlock = memo(
       previous.definitionsKey === next.definitionsKey &&
       nodesEqual(previous.node, next.node) &&
       (!next.context.renderBlock ||
-        (previous.doc === next.doc &&
-          previous.position === next.position &&
+        (previous.position === next.position &&
           nodesEqual(previous.previousSibling, next.previousSibling) &&
           nodesEqual(previous.nextSibling, next.nextSibling)))
     )

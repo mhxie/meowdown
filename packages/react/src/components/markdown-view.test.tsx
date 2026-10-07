@@ -929,6 +929,23 @@ describe('MarkdownView block memoization', () => {
     },
   )
 
+  it('keeps custom-rendered blocks memoized when a distant block changes', async () => {
+    const renderBlock = vi.fn<MarkdownBlockRenderer>(() => undefined)
+    const screen = await renderView('First\n\nSecond\n\nThird\n\nFourth', { renderBlock })
+    await expect.element(view.locate('p').last()).toHaveTextContent('Fourth')
+    renderBlock.mockClear()
+    await screen.rerender(
+      <div data-testid="markdown-view">
+        <MarkdownView markdown={'First\n\nSecond\n\nThird\n\nChanged'} renderBlock={renderBlock} />
+      </div>,
+    )
+    await expect.element(view.locate('p').last()).toHaveTextContent('Changed')
+    expect(renderBlock.mock.calls.map(([context]) => context.node.textContent)).toEqual([
+      'Third',
+      'Changed',
+    ])
+  })
+
   it('parses only the block that changed when the markdown grows', async () => {
     const resolveWikilink = vi.fn(resolveWikilinkAlias)
     const screen = await renderView('[[target|Alias]]\n\nfirst', { resolveWikilink })
