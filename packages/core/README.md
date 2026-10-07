@@ -38,6 +38,28 @@ const markdown = docToMarkdown(editor.state.doc)
 - Math (`$x$`, `$$x$$`, and ` ```math ` fenced code blocks), rendered as native MathML
 - Bare-domain autolinks (`google.com`), behind a curated TLD allowlist so `README.md` and `node.js` stay plain text
 
+## Numbered references
+
+`resolveWikilink` receives a generic `metadata` object from an immediately
+adjacent, single-line comment, for example
+`[[Note#^claim|ref]]<!-- {"metadata":{"source":true}} -->`. Hosts interpret
+that object and may return `{ target, display, appearance: 'reference', description }`.
+`display` names the source for accessibility; `description` adds hover and
+accessible details. Only an explicitly resolved reference folds its metadata.
+Malformed or unrecognized comments remain readable. Source, aliases, and
+comments serialize unchanged; use `formatMagicComment` when creating comments
+so double dashes are escaped safely.
+
+References render as superscript `[1]`, `[2]`, and so on using the
+`meowdown-reference` CSS counter, reset at each `.ProseMirror` root. Hosts may
+put the `.meowdown-reference` class on their own accessible reference controls
+to join the same sequence. Numbers follow rendered DOM order, including edits,
+without stateful resolvers. Focused references activate with Enter. In the editor,
+Alt-click or Alt+Enter reveals the reference's original wikilink and metadata
+for normal text editing and undo; the hover tooltip describes this shortcut.
+Escape or moving the selection outside folds the source again. A reference owns
+only its first adjacent metadata comment; later comments stay readable.
+
 ## Keyboard shortcuts
 
 `Mod` is Cmd on macOS and Ctrl elsewhere. Formatting shortcuts insert or remove

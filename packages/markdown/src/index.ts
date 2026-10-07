@@ -8,6 +8,16 @@ export type { LezerNodeName } from './node-names.ts'
 export { gfmBlockOnlyParser, gfmParser } from './parser.ts'
 export type { MarkdownParser } from './parser.ts'
 export { isSpaceChar } from './unicode.ts'
+export {
+  parseReferenceDefinition,
+  referenceUses,
+  serializeReferenceDefinition,
+  type ReferenceUse,
+  normalizeReferenceLabel,
+  mayBeReferenceDefinition,
+  type ReferenceDefinition,
+  type ReferenceDefinitions,
+} from './reference-links.ts'
 
 export {
   checkRoundTrip,
@@ -16,7 +26,11 @@ export {
 } from './ast/check-roundtrip.ts'
 export { isMarkdownAstEqual } from './ast/equal.ts'
 export { parseMarkdownAst, type ParseMarkdownAstOptions } from './ast/parse.ts'
-export { serializeMarkdownAst, type SerializeMarkdownAstOptions } from './ast/serialize.ts'
+export {
+  serializeMarkdownAst,
+  type SerializeMarkdownAstOptions,
+  type MarkdownTextMapping,
+} from './ast/serialize.ts'
 export type {
   MarkdownBlock,
   MarkdownBlockquote,

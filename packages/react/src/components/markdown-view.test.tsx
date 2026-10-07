@@ -1,19 +1,24 @@
 import '../testing/index.ts'
 
-import type { FileClickHandler, ImageClickHandler } from '@meowdown/core'
+import {
+  isNodeOfType,
+  type FileClickHandler,
+  type ImageClickHandler,
+  type WikilinkResolver,
+} from '@meowdown/core'
 import type { XPostMediaClickEvent } from '@meowdown/embed/x'
 import type { YouTubeVideoClickEvent } from '@meowdown/embed/youtube'
 import type { XPost } from '@post-embed/types'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
-import { page } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 
 import { resolveWikilinkAlias } from '../testing/resolve-wikilink-alias.ts'
 import { createTweet } from '../testing/tweet-fixture.ts'
 import { createXPost } from '../testing/x-post-fixture.ts'
 import { createYouTubeVideo } from '../testing/youtube-fixture.ts'
 
-import { MarkdownView } from './markdown-view.tsx'
+import { MarkdownView, type MarkdownBlockRenderer } from './markdown-view.tsx'
 
 // A photo that loads without the network: the card hides one that fails.
 const PHOTO_URL =
@@ -63,6 +68,239 @@ describe('MarkdownView', () => {
     )
     await expect.element(view.getByRole('heading', { name: 'Title', level: 1 })).toBeVisible()
     await expect.element(view.getByRole('heading', { name: 'Section', level: 2 })).toBeVisible()
+  })
+
+  it('shares reference metadata, source labels, and keyboard navigation with the editor', async () => {
+    const resolveWikilink = vi.fn<WikilinkResolver>(({ metadata }) => {
+      return metadata?.citation
+        ? {
+            target: 'Note#^c2',
+            display: 'Note, claim 2',
+            appearance: 'reference',
+            description: 'Recorded 2026-10-06',
+          }
+        : undefined
+    })
+    const onWikilinkClick = vi.fn()
+    await renderView(
+      '[[Note#^c2|ref]]<!-- {"metadata":{"citation":{"valid_at":"2026-10-06"}}} -->',
+      {
+        resolveWikilink,
+        onWikilinkClick,
+      },
+    )
+    expect(resolveWikilink).toHaveBeenCalledWith({
+      target: 'Note#^c2|ref',
+      metadata: { citation: { valid_at: '2026-10-06' } },
+    })
+    await expect.element(wikilink).toHaveClass('meowdown-reference')
+    await expect.element(wikilink).toHaveAccessibleName('Note, claim 2')
+    await expect.element(wikilink).toHaveAttribute('aria-description', 'Recorded 2026-10-06')
+    wikilink.element().focus()
+    await userEvent.keyboard('{Enter}')
+    expect(onWikilinkClick).toHaveBeenCalledWith(expect.objectContaining({ target: 'Note#^c2' }))
+    await wikilink.click()
+    expect(onWikilinkClick).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares a root-scoped CSS reference counter with custom blocks in document order', async () => {
+    const reference = '[[Note|ref]]<!-- {"metadata":{"source":true}} -->'
+    const resolveWikilink: WikilinkResolver = () => ({ appearance: 'reference', display: 'Note' })
+    const renderBlock: MarkdownBlockRenderer = ({ node }) => {
+      return isNodeOfType(node, 'codeBlock') ? (
+        <span className="meowdown-reference" aria-label="External source" />
+      ) : undefined
+    }
+    await renderView(`${reference}${reference}\n\n\`\`\`source\nExternal\n\`\`\`\n\n${reference}`, {
+      resolveWikilink,
+      renderBlock,
+    })
+    const root = view.element().querySelector('.ProseMirror')!
+    expect(getComputedStyle(root).counterReset).toBe('meowdown-reference 0')
+    const references = [...root.querySelectorAll('.meowdown-reference')]
+    expect(references.map((reference) => reference.getAttribute('aria-label'))).toEqual([
+      'Note',
+      'Note',
+      'External source',
+      'Note',
+    ])
+    for (const reference of references) {
+      expect(getComputedStyle(reference).counterIncrement).toBe('meowdown-reference 1')
+      expect(getComputedStyle(reference, '::before').content).toContain(
+        'counter(meowdown-reference)',
+      )
+    }
+  })
+
+  it('keeps malformed and unclaimed metadata readable without reference appearance', async () => {
+    await renderView('[[Note|ref]]<!-- {"metadata":null} --> and [[Plain]]', {
+      resolveWikilink: resolveWikilinkAlias,
+    })
+    expect(view.element().querySelector('.meowdown-reference')).toBeNull()
+    expect(view.element().textContent).toContain('<!-- {"metadata":null} -->')
+    await expect.element(wikilink.last()).toHaveTextContent('Plain')
+  })
+
+  it('renders references passively when interactivity is disabled', async () => {
+    const onWikilinkClick = vi.fn()
+    await renderView('[[Note]]', {
+      interactive: false,
+      resolveWikilink: () => ({ appearance: 'reference' }),
+      onWikilinkClick,
+    })
+    await expect.element(wikilink).toHaveClass('meowdown-reference')
+    expect(wikilink.element().getAttribute('tabindex')).toBeNull()
+    await wikilink.click()
+    expect(onWikilinkClick).not.toHaveBeenCalled()
+  })
+
+  it('customizes blocks with raw source and falls back to the normal renderer', async () => {
+    const renderBlock = vi.fn<MarkdownBlockRenderer>(({ node, renderDefault, interactive }) => {
+      if (isNodeOfType(node, 'codeBlock') && node.attrs.language === 'custom') {
+        return <aside>{node.textContent}</aside>
+      }
+      if (isNodeOfType(node, 'paragraph') && node.textContent.startsWith('special ')) {
+        return <section data-interactive={interactive}>{renderDefault()}</section>
+      }
+    })
+    await renderView('special [[Note]]\n\nordinary **bold**\n\n\`\`\`custom\nBody\n\`\`\`', {
+      renderBlock,
+    })
+    await expect.element(view.locate('aside')).toHaveTextContent('Body')
+    await expect.element(view.locate('section')).toHaveAttribute('data-interactive', 'true')
+    await expect.element(view.locate('strong')).toMatchTextContent('bold')
+    expect(
+      renderBlock.mock.calls.some(([context]) => context.node.textContent === 'special [[Note]]'),
+    ).toBe(true)
+  })
+
+  it('provides the original adjacent blocks and null at document boundaries', async () => {
+    const renderBlock = vi.fn<MarkdownBlockRenderer>()
+    await renderView('First\n\n```custom\nMiddle\n```\n\nLast', { renderBlock })
+    const contexts = new Map(
+      renderBlock.mock.calls.map(([context]) => [context.node.textContent, context]),
+    )
+    expect(contexts.get('First')?.previousSibling).toBeNull()
+    expect(contexts.get('First')?.nextSibling).toBe(contexts.get('Middle')?.node)
+    expect(contexts.get('Middle')?.previousSibling).toBe(contexts.get('First')?.node)
+    expect(contexts.get('Middle')?.nextSibling).toBe(contexts.get('Last')?.node)
+    expect(contexts.get('Last')?.previousSibling).toBe(contexts.get('Middle')?.node)
+    expect(contexts.get('Last')?.nextSibling).toBeNull()
+  })
+
+  it('provides source positions and inline fragments without splitting a paragraph', async () => {
+    const renderBlock: MarkdownBlockRenderer = ({ node, doc, position, renderInline }) => {
+      expect(doc.nodeAt(position)).toBe(node)
+      if (isNodeOfType(node, 'paragraph') && node.textContent === '**First** and second') {
+        return (
+          <p>
+            <span data-range="one">{renderInline(node.content.cut(0, 9))}</span>
+            {renderInline(node.content.cut(9))}
+          </p>
+        )
+      }
+    }
+    await renderView('# Title\n\n**First** and second', { renderBlock })
+    await expect.element(view.locate('p')).toHaveTextContent('**First** and second')
+    await expect.element(view.locate('[data-range="one"] strong')).toMatchTextContent('First')
+    expect(getComputedStyle(view.element().querySelector('.md-mark')!).fontSize).toBe('0px')
+    expect(view.element().querySelectorAll('p')).toHaveLength(1)
+  })
+
+  it('renders trimmed content with the same inline resolvers and reference definitions', async () => {
+    const source = '**Bold** [[Note|Alias]] and [manual][docs]. Hidden suffix'
+    const resolveWikilink = vi.fn(resolveWikilinkAlias)
+    const onWikilinkClick = vi.fn()
+    const renderBlock = vi.fn<MarkdownBlockRenderer>(({ node, renderDefault }) => {
+      if (node.textContent === source) {
+        return renderDefault(node.content.cut(0, source.indexOf(' Hidden suffix')))
+      }
+    })
+    await renderView(`${source}\n\n[docs]: https://example.com/docs`, {
+      renderBlock,
+      resolveWikilink,
+      onWikilinkClick,
+    })
+    await expect.element(view.locate('p')).toBeInTheDocument()
+    await expect.element(view.locate('strong')).toMatchTextContent('Bold')
+    await expect.element(wikilink).toHaveTextContent('Alias')
+    await expect.element(view.locate('a')).toHaveAttribute('href', 'https://example.com/docs')
+    expect(view.element().textContent).not.toContain('Hidden suffix')
+    expect(resolveWikilink).toHaveBeenCalledWith(expect.objectContaining({ target: 'Note|Alias' }))
+    await wikilink.click()
+    expect(onWikilinkClick).toHaveBeenCalledWith(expect.objectContaining({ target: 'Note' }))
+    expect(renderBlock.mock.calls[0][0].node.textContent).toBe(source)
+  })
+
+  it('retains enclosing emphasis when rendering independently annotated text ranges', async () => {
+    const renderBlock: MarkdownBlockRenderer = ({ node, renderInlineRange }) => {
+      if (!isNodeOfType(node, 'paragraph')) return
+      return (
+        <p>
+          {renderInlineRange(0, 9)}
+          <span data-claim>{renderInlineRange(9, 17)}</span>
+          {renderInlineRange(17, node.textContent.length)}
+        </p>
+      )
+    }
+    await renderView('**before selected after**', { renderBlock })
+    await expect.element(view.locate('[data-claim] strong')).toHaveTextContent('selected')
+    expect(view.element().querySelectorAll('p')).toHaveLength(1)
+    expect(view.element().querySelectorAll('strong')).toHaveLength(3)
+  })
+
+  it('keeps the full default fallback when a custom fragment is not returned', async () => {
+    const renderBlock: MarkdownBlockRenderer = ({ node, renderDefault }) => {
+      void renderDefault(node.content.cut(0, 4))
+    }
+    await renderView('Full **source**', { renderBlock })
+    await expect.element(view.locate('strong')).toMatchTextContent('source')
+  })
+
+  it('ignores container replacements so task clicks still identify the source task', async () => {
+    const onTaskClick = vi.fn()
+    const renderBlock: MarkdownBlockRenderer = ({ node, renderDefault }) => {
+      if (isNodeOfType(node, 'blockquote')) {
+        return renderDefault(node.content.cut(node.firstChild!.nodeSize))
+      }
+    }
+    await renderView('> - [ ] First\n> - [ ] Second', { renderBlock, onTaskClick })
+    await expect.element(view.locate('p').first()).toHaveTextContent('First')
+    await expect.element(view.locate('p').last()).toHaveTextContent('Second')
+    expect(view.element().querySelectorAll('input[type="checkbox"]')).toHaveLength(2)
+    await view.locate('input[type="checkbox"]').nth(1).click()
+    expect(onTaskClick).toHaveBeenCalledWith(expect.objectContaining({ index: 1, text: 'Second' }))
+  })
+
+  it('ignores replacement fragments that are invalid for a textblock', async () => {
+    const renderBlock: MarkdownBlockRenderer = ({ node, previousSibling, renderDefault }) => {
+      if (node.textContent === 'Summary' && previousSibling) {
+        return renderDefault(previousSibling.content)
+      }
+    }
+    await renderView('> - [ ] First\n> - [ ] Second\n\nSummary', { renderBlock })
+    await expect.element(view.locate('p').last()).toHaveTextContent('Summary')
+    expect(view.element().querySelectorAll('input[type="checkbox"]')).toHaveLength(2)
+  })
+
+  it('trims nested task textblocks without changing task indexes or source labels', async () => {
+    const onTaskClick = vi.fn()
+    const renderBlock: MarkdownBlockRenderer = ({ node, renderDefault }) => {
+      if (node.isTextblock && node.textContent === '**First** suffix') {
+        return renderDefault(node.content.cut(0, '**First**'.length))
+      }
+    }
+    await renderView('> - [ ] **First** suffix\n> - [ ] Second', { renderBlock, onTaskClick })
+    await expect.element(view.locate('strong')).toMatchTextContent('First')
+    expect(view.element().textContent).not.toContain('suffix')
+    await view.locate('input[type="checkbox"]').first().click()
+    expect(onTaskClick).toHaveBeenLastCalledWith(
+      expect.objectContaining({ index: 0, text: '**First** suffix' }),
+    )
+    await view.locate('input[type="checkbox"]').last().click()
+    expect(onTaskClick).toHaveBeenLastCalledWith(
+      expect.objectContaining({ index: 1, text: 'Second' }),
+    )
   })
 
   it('renders inline marks as rich text, not source', async () => {
@@ -665,6 +903,49 @@ describe('MarkdownView', () => {
 })
 
 describe('MarkdownView block memoization', () => {
+  it.each(['previous', 'next'] as const)(
+    'updates an unchanged block when only its %s sibling changes',
+    async (side) => {
+      const renderBlock: MarkdownBlockRenderer = ({ node, previousSibling, nextSibling }) => {
+        if (node.textContent === 'Stable') {
+          return <p>{`${previousSibling?.textContent} / ${nextSibling?.textContent}`}</p>
+        }
+      }
+      const screen = await renderView('Before\n\nStable\n\nAfter', { renderBlock })
+      await expect.element(view.locate('p').nth(1)).toHaveTextContent('Before / After')
+      await screen.rerender(
+        <div data-testid="markdown-view">
+          <MarkdownView
+            markdown={
+              side === 'previous' ? 'Changed\n\nStable\n\nAfter' : 'Before\n\nStable\n\nChanged'
+            }
+            renderBlock={renderBlock}
+          />
+        </div>,
+      )
+      await expect
+        .element(view.locate('p').nth(1))
+        .toHaveTextContent(side === 'previous' ? 'Changed / After' : 'Before / Changed')
+    },
+  )
+
+  it('keeps custom-rendered blocks memoized when a distant block changes', async () => {
+    const renderBlock = vi.fn<MarkdownBlockRenderer>(() => undefined)
+    const screen = await renderView('First\n\nSecond\n\nThird\n\nFourth', { renderBlock })
+    await expect.element(view.locate('p').last()).toHaveTextContent('Fourth')
+    renderBlock.mockClear()
+    await screen.rerender(
+      <div data-testid="markdown-view">
+        <MarkdownView markdown={'First\n\nSecond\n\nThird\n\nChanged'} renderBlock={renderBlock} />
+      </div>,
+    )
+    await expect.element(view.locate('p').last()).toHaveTextContent('Changed')
+    expect(renderBlock.mock.calls.map(([context]) => context.node.textContent)).toEqual([
+      'Third',
+      'Changed',
+    ])
+  })
+
   it('parses only the block that changed when the markdown grows', async () => {
     const resolveWikilink = vi.fn(resolveWikilinkAlias)
     const screen = await renderView('[[target|Alias]]\n\nfirst', { resolveWikilink })

@@ -71,6 +71,18 @@ Common `MeowdownEditor` props:
 
 Every prop, callback, and `EditorHandle` method is documented in the [API reference](https://npmx.dev/package-docs/@meowdown%2Freact/).
 
+`MarkdownView` also accepts `renderBlock`, a pure `MarkdownBlockRenderer`.
+Its context contains the ProseMirror `node`, `interactive`, and a lazy
+`renderDefault()` for composing the built-in presentation. Return `undefined`
+for normal rendering or `null` to omit a block. `node.textContent` retains
+inline Markdown or the code body; code blocks expose `node.attrs.language`.
+The hook applies to nested blocks too. Honor `interactive` in custom controls,
+and do not use callback order to assign reference numbers: memoized blocks can
+render independently. Output may depend only on the block, its `position`, and
+its `previousSibling`/`nextSibling`; `doc` locates the block but other blocks
+in it do not trigger a re-render. Wikilink metadata and numbered reference appearance work
+the same in `MarkdownView`, `MarkdownInlineView`, and the editor.
+
 ## Styling
 
 Import both stylesheets: `@meowdown/core/style.css` (the editor theme and variables) and `@meowdown/react/style.css` (the component layout). The core theme is documented in [`@meowdown/core`](https://www.npmjs.com/package/@meowdown/core).

@@ -18,6 +18,12 @@ export {
 } from '@prosekit/extensions/search'
 export { markdownToDoc, type MarkdownToDocOptions } from './converters/md-to-pm.ts'
 export { docToMarkdown, type DocToMarkdownOptions } from './converters/pm-to-md.ts'
+export { createMarkdownSourceMap, type MarkdownSourceMap } from './converters/source-map.ts'
+export {
+  clipboardMarkdownWithReferences,
+  prepareReferenceTransport,
+  type PreparedReferenceTransport,
+} from './extensions/clipboard/reference-transport.ts'
 export { defineBulletAfterHeading } from './extensions/bullet-after-heading.ts'
 export {
   defineCodeBlockSyntaxHighlight,
@@ -191,6 +197,7 @@ export {
   type WikilinkHoverHit,
 } from './extensions/wikilink-hover.ts'
 export { defineWikilinkTrigger } from './extensions/wikilink-trigger.ts'
+export { formatMagicComment, type MagicComment } from './extensions/magic-comment.ts'
 export {
   type WikilinkOptions,
   type WikilinkPayload,

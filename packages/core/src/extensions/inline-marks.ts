@@ -174,7 +174,12 @@ function defineMdWikilink() {
   return defineMarkSpec<'mdWikilink', MdWikilinkAttrs>({
     name: 'mdWikilink' satisfies MarkName,
     inclusive: false,
-    attrs: { target: { default: '' }, display: { default: '' } },
+    attrs: {
+      target: { default: '' },
+      display: { default: '' },
+      appearance: { default: null },
+      description: { default: '' },
+    },
     toDOM: () => ['span', { class: 'md-wikilink' }, 0],
     parseDOM: [{ tag: 'span.md-wikilink' }],
   })
@@ -190,6 +195,14 @@ export interface MdWikilinkAttrs {
    * Label shown in place of the source, or `''` to show the target.
    */
   display: string
+  /**
+   * Host-selected numbered reference presentation, or the normal label.
+   */
+  appearance: 'reference' | null
+  /**
+   * Host-provided accessible description and hover text.
+   */
+  description: string
 }
 
 /**

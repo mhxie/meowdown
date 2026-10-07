@@ -39,6 +39,21 @@ export interface SerializeMarkdownAstOptions {
    * Whether to serialize the doc's `frontmatter` attribute as a leading `---` block. Off by default.
    */
   frontmatter?: boolean
+  /**
+   * Observe literal text positions in the serialized snapshot, excluding structural prefixes.
+   */
+  onText?: (mapping: MarkdownTextMapping) => void
+}
+
+/**
+ * UTF-16 offsets connecting an AST leaf's literal value to the emitted Markdown.
+ */
+export interface MarkdownTextMapping {
+  node: MarkdownInline
+  from: number
+  to: number
+  textFrom: number
+  textTo: number
 }
 
 /**
@@ -60,7 +75,7 @@ export function serializeMarkdownAst(
   node: MarkdownNode,
   options: SerializeMarkdownAstOptions = {},
 ): string {
-  const out = new MdOut()
+  const out = new MdOut(options.onText)
   if (options.frontmatter) {
     emitFrontmatter(node.type === 'document' ? node.frontmatter : undefined, out)
   }
@@ -132,6 +147,12 @@ function emitHeading(node: MarkdownHeading, out: MdOut): void {
 // ─────────────────────────────────────────────────────────────────────
 
 class MdOut {
+  private readonly onText?: (mapping: MarkdownTextMapping) => void
+
+  constructor(onText?: (mapping: MarkdownTextMapping) => void) {
+    this.onText = onText
+  }
+
   private parts: string[] = []
   /**
    * Prefix applied to every new line inside the current nesting.
@@ -176,7 +197,7 @@ class MdOut {
    * for this: an unprefixed line would fall out of a code block, an html
    * comment, or an HTML block.
    */
-  write(text: string, lazyLines = false): void {
+  write(text: string, lazyLines = false, mapping?: { node: MarkdownInline; offset: number }): void {
     if (text === '') return
     this.emitDeferredBlankLine()
     if (this.atLineStart) {
@@ -193,21 +214,37 @@ class MdOut {
     // Fast path: most writes are single-line markers or text. Only split
     // when content has embedded newlines (code block content, etc).
     if (!text.includes('\n')) {
-      this.push(text)
+      this.pushText(text, mapping)
       return
     }
     const lines = text.split('\n')
     // Index loop avoids the `.entries()` iterator allocation - measurable
     // (~7%) on the hot write() path.
     const lazy = lazyLines && this.linePrefix !== ''
+    let consumed = 0
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       if (i > 0) {
-        this.push('\n')
+        this.pushText('\n', mapping && { node: mapping.node, offset: mapping.offset + consumed })
+        consumed++
         this.push(lazy ? continuationPrefix(line, this.linePrefix) : this.linePrefix)
       }
-      this.push(line)
+      this.pushText(line, mapping && { node: mapping.node, offset: mapping.offset + consumed })
+      consumed += line.length
     }
+  }
+
+  private pushText(text: string, mapping?: { node: MarkdownInline; offset: number }): void {
+    if (mapping) {
+      this.onText?.({
+        node: mapping.node,
+        from: this.length,
+        to: this.length + text.length,
+        textFrom: mapping.offset,
+        textTo: mapping.offset + text.length,
+      })
+    }
+    this.push(text)
   }
 
   /**
@@ -407,7 +444,7 @@ function emit(node: MarkdownNode, out: MdOut): void {
     }
     case 'htmlComment': {
       const content = node.value
-      out.write(content)
+      out.write(content, false, { node, offset: 0 })
       out.closeBlock()
       return
     }
@@ -744,9 +781,15 @@ function emitInlineChildren(node: MarkdownInline, out: MdOut): void {
   const first = chunks ? chunks[0] : node.value
   const lazy = first == null || !out.atContentStart || !opensHTMLBlock(first)
   if (chunks) {
-    for (const chunk of chunks) if (chunk) out.write(chunk, lazy)
+    let offset = 0
+    for (const chunk of chunks) {
+      if (chunk) {
+        out.write(chunk, lazy, { node, offset })
+        offset += chunk.length
+      }
+    }
   } else if (node.value) {
-    out.write(node.value, lazy)
+    out.write(node.value, lazy, { node, offset: 0 })
   }
 }
 

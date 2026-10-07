@@ -20,7 +20,7 @@ import type { LinkClickHandler } from './link-click.ts'
 import type { TagClickHandler } from './tag-click.ts'
 import { findTagAt } from './tag-click.ts'
 import type { WikilinkClickHandler } from './wikilink-click.ts'
-import { findWikilinkAt } from './wikilink-click.ts'
+import { findWikilinkAt, findWikilinkForElement } from './wikilink-click.ts'
 
 const followLinkKey = new PluginKey('meowdown-follow-link')
 
@@ -43,6 +43,16 @@ function createFollowLinkPlugin(getHandlers?: (state: EditorState) => FollowLink
 
         const { state } = view
         const currentHandlers = getHandlers?.(state) ?? {}
+        const focusedReference =
+          event.target instanceof HTMLElement &&
+          event.target.closest<HTMLElement>('.md-wikilink-view-preview.meowdown-reference')
+        if (focusedReference && currentHandlers.onWikilinkClick) {
+          const hit = findWikilinkForElement(view, focusedReference)
+          if (hit) {
+            currentHandlers.onWikilinkClick({ target: hit.target, event, mod: isModEvent(event) })
+            return true
+          }
+        }
         const selectedAtom = getSelectedAtomRange(state)
         const mod = isModEvent(event)
 

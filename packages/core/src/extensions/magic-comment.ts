@@ -24,6 +24,11 @@ export interface MagicComment {
    * written, validated where the card kind is known.
    */
   snapshot?: object
+  /**
+   * Host-defined data for the preceding inline element. Meowdown passes this
+   * object to the host resolver without interpreting its contents.
+   */
+  metadata?: Readonly<Record<string, unknown>>
 }
 
 // The inline comment carrying a JSON object at the start of the text:
@@ -57,11 +62,13 @@ export function parseMagicComment(comment: string): MagicComment | undefined {
   const noLink = data.noLink === true ? true : undefined
   const snapshot =
     isObject(data.snapshot) && !Array.isArray(data.snapshot) ? data.snapshot : undefined
+  const metadata =
+    isObject(data.metadata) && !Array.isArray(data.metadata) ? data.metadata : undefined
 
   // Not a magic comment unless it carries at least one recognized field.
-  if (!width && !height && !noLink && !snapshot) return
+  if (!width && !height && !noLink && !snapshot && !metadata) return
 
-  return { width, height, noLink, snapshot }
+  return { width, height, noLink, snapshot, metadata }
 }
 
 /**

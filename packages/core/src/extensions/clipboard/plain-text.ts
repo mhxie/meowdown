@@ -15,6 +15,8 @@ import { getMarkMode } from '../mark-mode-config.ts'
 import { isMarkOfType } from '../mark-names.ts'
 import { isNodeOfType, type NodeName } from '../node-names.ts'
 
+import { clipboardMarkdownWithReferences } from './reference-transport.ts'
+
 /**
  * Serialize a slice to Markdown. A block whose content start is not selected is
  * flattened so its opening markers are not synthesized. Incomplete fenced code
@@ -107,7 +109,8 @@ export function definePlainTextSerializer(): PlainExtension {
         clipboardTextSerializer: (slice, view) => {
           const hide = getMarkMode(view.state) === 'hide'
           const cleaned = hide ? stripHiddenInline(slice) : slice
-          return sliceToMarkdown(view.state.schema, cleaned, view.state.selection)
+          const markdown = sliceToMarkdown(view.state.schema, cleaned, view.state.selection)
+          return hide ? markdown : clipboardMarkdownWithReferences(markdown, slice, view.state.doc)
         },
       },
     }),

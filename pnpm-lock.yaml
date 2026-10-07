@@ -120,12 +120,6 @@ importers:
       mdast-util-to-markdown:
         specifier: ^2.2.0
         version: 2.2.0
-      micromark-util-decode-string:
-        specifier: ^2.0.1
-        version: 2.0.1
-      micromark-util-normalize-identifier:
-        specifier: ^2.0.1
-        version: 2.0.1
       prosemirror-flat-list:
         specifier: ^0.7.1
         version: 0.7.1
@@ -249,6 +243,12 @@ importers:
       '@post-embed/schema':
         specifier: ^0.5.2
         version: 0.5.2(typescript@6.0.3)
+      micromark-util-decode-string:
+        specifier: ^2.0.1
+        version: 2.0.1
+      micromark-util-normalize-identifier:
+        specifier: ^2.0.1
+        version: 2.0.1
     devDependencies:
       '@meowdown/vitest':
         specifier: workspace:*
