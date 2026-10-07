@@ -8,6 +8,8 @@ import { setupFixture } from '../../testing/index.ts'
 import { defineEditorExtension } from '../extension.ts'
 import { collectReferenceDefinitions } from '../reference-links.ts'
 
+import { prepareReferenceTransport } from './reference-transport.ts'
+
 const source =
   'A [ref][x] and [ref][y], with `[literal][z]`.\n\n[x]: https://example.org/paper "p. 12"\n\n[y]: https://example.org/paper "p. 14"\n\n[z]: https://example.org/literal'
 
@@ -167,5 +169,67 @@ describe('reference clipboard transport', () => {
     expect(definitions.get('Y')?.title).toBe('p. 14')
     to.editor.commands.undo()
     expect(docToMarkdown(to.view.state.doc)).toBe(before)
+  })
+
+  it('carries an uncited definition that was part of the selection', () => {
+    using from = setupFixture({ containerId: 'source' })
+    from.set(
+      markdownToDoc('See [a][x].\n\n[x]: https://a\n\n[y]: https://b', {
+        nodes: from.editor.nodes,
+      }),
+    )
+    const doc = from.view.state.doc
+    const html = from.view.serializeForClipboard(doc.slice(0, doc.content.size)).dom.innerHTML
+    using to = setupFixture({ containerId: 'target' })
+    to.set(markdownToDoc('Destination.', { nodes: to.editor.nodes }))
+    pasteHTML(to.view, html)
+    const definitions = collectReferenceDefinitions(to.view.state.doc).definitions
+    expect(definitions.get('X')?.href).toBe('https://a')
+    expect(definitions.get('Y')?.href).toBe('https://b')
+  })
+
+  it('omits a container left empty by a moved definition', () => {
+    using from = setupFixture({ containerId: 'source' })
+    from.set(markdownToDoc('See [a][x].\n\n> [x]: https://a', { nodes: from.editor.nodes }))
+    const doc = from.view.state.doc
+    using to = setupFixture({ containerId: 'target' })
+    to.set(markdownToDoc('Destination.', { nodes: to.editor.nodes }))
+    const prepared = prepareReferenceTransport(doc.slice(0, doc.content.size), to.view.state.doc)
+    expect(prepared?.slice.content.childCount).toBe(1)
+    expect(prepared?.slice.content.firstChild?.textContent).toBe('See [a][x].')
+    expect(prepared?.definitions.map((node) => node.textContent)).toEqual(['[X]: <https://a>'])
+  })
+
+  it('prefers the copied definition over one cut off at the edge of the selection', () => {
+    using from = setupFixture({ containerId: 'source' })
+    from.set(
+      markdownToDoc('See [a][x].\n\n[x]: https://example.org/full', {
+        nodes: from.editor.nodes,
+      }),
+    )
+    const doc = from.view.state.doc
+    const end = doc.content.size - '/full'.length - 1
+    const html = from.view.serializeForClipboard(doc.slice(0, end)).dom.innerHTML
+    using to = setupFixture({ containerId: 'target' })
+    to.set(markdownToDoc('Destination.', { nodes: to.editor.nodes }))
+    pasteHTML(to.view, html)
+    expect(collectReferenceDefinitions(to.view.state.doc).definitions.get('X')?.href).toBe(
+      'https://example.org/full',
+    )
+  })
+
+  it('leaves default paste alone when nothing needs to be rewritten', () => {
+    using from = setupFixture({ containerId: 'source' })
+    from.set(
+      markdownToDoc('See [a][x].\n\n[x]: https://a', {
+        nodes: from.editor.nodes,
+      }),
+    )
+    const doc = from.view.state.doc
+    const cited = doc.slice(0, doc.firstChild!.nodeSize)
+    const html = from.view.serializeForClipboard(cited).dom.innerHTML
+    using to = setupFixture({ containerId: 'target' })
+    to.set(markdownToDoc('Destination.\n\n[x]: https://a', { nodes: to.editor.nodes }))
+    expect(prepareReferenceTransport(cited, to.view.state.doc, html)).toBeNull()
   })
 })

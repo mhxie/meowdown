@@ -95,6 +95,9 @@ export interface PreparedReferenceTransport {
 
 /**
  * Resolve incoming definitions before a caller inserts a clipboard or drag slice.
+ *
+ * Returns `null` when the slice can be inserted as-is: no definition needs to
+ * be added, renamed, or dropped.
  */
 export function prepareReferenceTransport(
   slice: Slice,
@@ -105,7 +108,11 @@ export function prepareReferenceTransport(
   const incoming = new Map(
     clipboardDefinitions(html).map((definition) => [definition.key, definition]),
   )
-  for (const [key, definition] of selected.definitions) incoming.set(key, definition)
+  // A definition on an open edge of the slice may be cut off mid-destination,
+  // so the complete copy carried in the clipboard HTML wins when present.
+  for (const [key, definition] of selected.definitions) {
+    if (!incoming.has(key)) incoming.set(key, definition)
+  }
   const used = referencedDefinitions(slice.content, incoming)
   if (used.length === 0) return null
   const existing = new Map(collectReferenceDefinitions(doc).definitions)
@@ -128,10 +135,15 @@ export function prepareReferenceTransport(
       added.push(next)
     }
   }
+  let changed = false
   function rewrite(fragment: Fragment): Fragment {
     const nodes: ProseMirrorNode[] = []
     fragment.forEach((node) => {
-      if (selected.nodes.has(node)) return
+      // Selected definitions cite themselves, so each one is re-added or deduplicated.
+      if (selected.nodes.has(node)) {
+        changed = true
+        return
+      }
       if (node.type.spec.code) {
         nodes.push(node)
         return
@@ -143,16 +155,30 @@ export function prepareReferenceTransport(
           if (key && key !== use.key)
             text = text.slice(0, use.from) + `[${key}]` + text.slice(use.to)
         }
-        nodes.push(
-          text === node.textContent
-            ? node
-            : node.copy(text ? Fragment.from(node.type.schema.text(text)) : Fragment.empty),
-        )
-      } else nodes.push(node.childCount ? node.copy(rewrite(node.content)) : node)
+        if (text === node.textContent) {
+          nodes.push(node)
+          return
+        }
+        changed = true
+        nodes.push(node.copy(text ? Fragment.from(node.type.schema.text(text)) : Fragment.empty))
+        return
+      }
+      if (!node.childCount) {
+        nodes.push(node)
+        return
+      }
+      const content = rewrite(node.content)
+      // A container whose only children were moved definitions would be empty.
+      if (content.childCount === 0) {
+        changed = true
+        return
+      }
+      nodes.push(content.eq(node.content) ? node : node.copy(content))
     })
     return Fragment.from(nodes)
   }
   const content = rewrite(slice.content)
+  if (!changed && added.length === 0) return null
   const open = Slice.maxOpen(content)
   return {
     slice: new Slice(
