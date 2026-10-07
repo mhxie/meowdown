@@ -110,6 +110,22 @@ describe('wikilink resolver', () => {
     expect(fixture.view.state.selection.from).toBe(3)
   })
 
+  it('leaves an Alt-click outside a reference alone while a reference is selected', async () => {
+    const source = '[[Note|ref]]<!-- {"metadata":{"source":true}} --> tail'
+    using fixture = setup(source, {
+      resolveWikilink: () => ({ target: 'Note', appearance: 'reference' }),
+    })
+    const end = source.indexOf(' tail') + 1
+    fixture.view.dispatch(
+      fixture.view.state.tr.setSelection(TextSelection.create(fixture.doc, 1, end)),
+    )
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true, altKey: true })
+    fixture.view.dom.querySelector('p')!.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    await expect.element(label).toBeVisible()
+    expect(fixture.view.state.selection.from).toBe(1)
+  })
+
   it('renders reference metadata without rewriting source and follows its target', async () => {
     const metadata = { citation: { valid_at: '2026-10-06', details: 'a -- b' } }
     const source = `Claim [[Note#^c2|ref]]${formatMagicComment({ metadata })}`

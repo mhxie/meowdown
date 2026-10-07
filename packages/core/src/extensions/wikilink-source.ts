@@ -23,6 +23,10 @@ export function isEditingWikilinkSource(state: EditorState): boolean {
 function revealSource(view: EditorView, event: MouseEvent | KeyboardEvent): boolean {
   if (!view.editable || !(event.target instanceof HTMLElement)) return false
   const element = event.target.closest<HTMLElement>('.md-wikilink-view-preview.meowdown-reference')
+  if (element) return revealRange(view, event, findWikilinkForElement(view, element))
+  // A click reveals only the reference it hits; the selected reference is a
+  // keyboard target, so Alt-clicking elsewhere keeps its default behavior.
+  if (event instanceof MouseEvent) return false
   const selected = getMarkRangeAt(view.state, view.state.selection.from, 'mdWikilink')
   const selectedReference =
     selected &&
@@ -31,7 +35,14 @@ function revealSource(view: EditorView, event: MouseEvent | KeyboardEvent): bool
     selected.to === view.state.selection.to
       ? selected
       : undefined
-  const range = element ? findWikilinkForElement(view, element) : selectedReference
+  return revealRange(view, event, selectedReference)
+}
+
+function revealRange(
+  view: EditorView,
+  event: Event,
+  range: SourceRange | null | undefined,
+): boolean {
   if (!range) return false
   event.preventDefault()
   view.dispatch(
