@@ -1,8 +1,9 @@
-import { defineMarkView, type PlainExtension } from '@prosekit/core'
+import { defineMarkView, union, type PlainExtension } from '@prosekit/core'
 import type { MarkViewConstructor } from '@prosekit/pm/view'
 
 import type { MdWikilinkAttrs } from './inline-marks.ts'
 import type { MarkName } from './mark-names.ts'
+import { defineWikilinkSourceEditing } from './wikilink-source.ts'
 
 /**
  * What {@link WikilinkResolver} sees for one `[[...]]` wikilink.
@@ -13,6 +14,10 @@ export interface WikilinkPayload {
    * it: an alias form such as `[[target|alias]]` arrives here whole.
    */
   target: string
+  /**
+   * Host-defined metadata from an immediately adjacent magic comment.
+   */
+  metadata?: Readonly<Record<string, unknown>>
 }
 
 /**
@@ -27,6 +32,15 @@ export interface WikilinkResolution {
    * Label shown in place of the source. Defaults to the target.
    */
   display?: string
+  /**
+   * Render as a compact numbered reference. Numbers follow rendered document
+   * order via CSS; the resolver must not count or rewrite source labels.
+   */
+  appearance?: 'reference'
+  /**
+   * Additional accessible description and hover text for a reference.
+   */
+  description?: string
 }
 
 /**
@@ -52,7 +66,7 @@ export interface WikilinkOptions {
  * `defineAtomMarkNavigation`.
  */
 function createWikilinkMarkView(): MarkViewConstructor {
-  return (mark) => {
+  return (mark, view) => {
     const attrs = mark.attrs as MdWikilinkAttrs
 
     const dom = document.createElement('span')
@@ -62,6 +76,21 @@ function createWikilinkMarkView(): MarkViewConstructor {
     preview.className = 'md-wikilink-view-preview md-atom-view-preview'
     preview.contentEditable = 'false'
     preview.dataset.testid = 'wikilink'
+    if (attrs.appearance === 'reference') {
+      const name = attrs.display || attrs.target
+      preview.classList.add('meowdown-reference')
+      preview.setAttribute('role', 'link')
+      preview.tabIndex = 0
+      preview.setAttribute('aria-label', name)
+      if (attrs.description) preview.setAttribute('aria-description', attrs.description)
+      preview.title = [
+        name,
+        attrs.description,
+        view.editable ? 'Alt-click or Alt+Enter to edit reference source; Escape to close' : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    }
     dom.appendChild(preview)
 
     const label = document.createElement('span')
@@ -89,8 +118,11 @@ function createWikilinkMarkView(): MarkViewConstructor {
  * treats `mdWikilink` (and `mdImage`) as one unit.
  */
 export function defineWikilink(): PlainExtension {
-  return defineMarkView({
-    name: 'mdWikilink' satisfies MarkName,
-    constructor: createWikilinkMarkView(),
-  }) as PlainExtension
+  return union(
+    defineMarkView({
+      name: 'mdWikilink' satisfies MarkName,
+      constructor: createWikilinkMarkView(),
+    }),
+    defineWikilinkSourceEditing(),
+  ) as PlainExtension
 }

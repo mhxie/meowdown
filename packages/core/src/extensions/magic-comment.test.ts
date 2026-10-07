@@ -48,6 +48,16 @@ describe('parseMagicComment', () => {
       width: 100,
     })
   })
+
+  it('preserves host metadata and rejects non-object metadata', () => {
+    const metadata = { citation: { valid_at: '2026-10-06', label: 'a -- b' } }
+    const comment = formatMagicComment({ metadata })
+    expect(comment.slice('<!--'.length, -'-->'.length)).not.toContain('--')
+    expect(parseMagicComment(comment)).toEqual({ metadata })
+    for (const value of ['null', '[]', 'true', '"citation"']) {
+      expect(parseMagicComment(`<!-- {"metadata":${value}} -->`)).toBeUndefined()
+    }
+  })
 })
 
 describe('formatMagicComment / stripMagicComment', () => {

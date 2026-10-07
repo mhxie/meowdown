@@ -6,6 +6,8 @@ export { MeowdownEditor, type EditorMode, type EditorProps } from './components/
 export type { NoteEmbedPayload, NoteEmbedRenderer } from './components/note-embed.ts'
 export {
   MarkdownView,
+  type MarkdownBlockRenderer,
+  type MarkdownBlockRenderContext,
   type MarkdownViewProps,
   type TaskClickHandler,
   type TaskClickPayload,

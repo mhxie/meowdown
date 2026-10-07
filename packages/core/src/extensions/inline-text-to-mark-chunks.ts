@@ -280,8 +280,15 @@ function walkAtomChild(
   const node = nodes[index]
   switch (node.type) {
     case LEZER_NODE_IDS.Wikilink:
-      walkWikilink(node, parentMarks, text, marks, out, options)
-      return node.to
+      return walkWikilink(
+        node,
+        parentMarks,
+        text,
+        marks,
+        out,
+        options,
+        takeMagicComment(nodes, index, text),
+      )
     case LEZER_NODE_IDS.WikiEmbed:
       walkWikiEmbed(node, parentMarks, text, marks, out, options)
       return node.to
@@ -690,6 +697,19 @@ interface FoldedMagicComments {
   to: number
 }
 
+function takeMagicComment(
+  nodes: readonly InlineElement[],
+  index: number,
+  text: string,
+): FoldedMagicComments | undefined {
+  const next = nodes[index + 1]
+  if (next?.type !== LEZER_NODE_IDS.Comment || next.from !== nodes[index].to) return
+  const comment = text.slice(next.from, next.to)
+  if (/[\r\n]/.test(comment)) return
+  const magic = parseMagicComment(comment)
+  return magic ? { magic, to: next.to } : undefined
+}
+
 /**
  * The run of magic comments chained immediately behind `nodes[index]` (an
  * image or a URL), or undefined when no magic comment directly abuts it. The
@@ -813,18 +833,29 @@ function walkWikilink(
   marks: TypedMarkBuilders,
   out: MarkChunk[],
   options: WikilinkOptions | undefined,
-): void {
+  trailing?: FoldedMagicComments,
+): number {
   const source = text.slice(node.from + 2, node.to - 2).trim()
-  const resolution = options?.resolveWikilink?.({ target: source })
+  const metadata = trailing?.magic.metadata
+  const resolution = options?.resolveWikilink?.({
+    target: source,
+    ...(metadata ? { metadata } : {}),
+  })
+  // Only an explicitly resolved reference owns its sidecar. Unknown host
+  // metadata stays readable instead of disappearing behind an ordinary link.
+  const to = resolution?.appearance === 'reference' && metadata && trailing ? trailing.to : node.to
 
-  emit(out, node.from, node.to, [
+  emit(out, node.from, to, [
     ...parentMarks,
     createUnitPack(marks, out, parentMarks, node.from, { key: 'wikilink' }),
     marks.mdWikilink.create({
       target: resolution?.target ?? source,
       display: resolution?.display ?? '',
+      appearance: resolution?.appearance ?? null,
+      description: resolution?.description ?? '',
     }),
   ])
+  return to
 }
 
 /**
@@ -883,7 +914,7 @@ function walkWikiEmbed(
   emit(out, node.from, node.to, [
     ...parentMarks,
     createUnitPack(marks, out, parentMarks, node.from, { key: 'wikilink' }),
-    marks.mdWikilink.create({ target, display }),
+    marks.mdWikilink.create({ target, display, appearance: null, description: '' }),
   ])
 }
 

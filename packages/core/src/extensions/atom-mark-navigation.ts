@@ -25,6 +25,7 @@ import {
   getMarkRangeBefore,
   getMarkRangeStrictlyAround,
 } from './mark-range.ts'
+import { isEditingWikilinkSource } from './wikilink-source.ts'
 
 type AtomMarks = ReadonlyArray<{ name: MarkName; modes: ReadonlyArray<MarkMode> }>
 
@@ -37,6 +38,7 @@ function getActiveMarkNames(marks: AtomMarks, state: EditorState): MarkName[] {
   const mode = getMarkMode(state)
   const result: MarkName[] = []
   for (const mark of marks) {
+    if (mark.name === 'mdWikilink' && isEditingWikilinkSource(state)) continue
     if (mark.modes.includes(mode)) {
       result.push(mark.name)
     }
@@ -62,6 +64,7 @@ function getSelectedRange(
  * The atom source unit the selection exactly spans, or undefined.
  */
 export function getSelectedAtomRange(state: EditorState): MarkRange | undefined {
+  if (isEditingWikilinkSource(state)) return
   return getSelectedRange(state, ATOM_SOURCE_MARK_NAMES)
 }
 

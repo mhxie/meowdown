@@ -1159,6 +1159,85 @@ describe('tag', () => {
 })
 
 describe('wikilink', () => {
+  it('passes adjacent host metadata and folds it into a resolved reference', () => {
+    const metadata = { citation: { valid_at: '2026-10-06' } }
+    const source = `[[Note#^c2|ref]]${formatMagicComment({ metadata })}`
+    const resolveWikilink = vi.fn(() => ({
+      target: 'Note#^c2',
+      display: 'Note',
+      appearance: 'reference' as const,
+    }))
+    const chunks = inlineTextToMarkChunks(getMarkBuilders(), source, { resolveWikilink })
+    expect(resolveWikilink).toHaveBeenCalledWith({ target: 'Note#^c2|ref', metadata })
+    expect(chunks).toHaveLength(1)
+    expect(chunks[0].slice(0, 2)).toEqual([0, source.length])
+    expect(chunks[0][2].find((mark) => isMarkOfType(mark, 'mdWikilink'))?.attrs).toMatchObject({
+      target: 'Note#^c2',
+      appearance: 'reference',
+    })
+  })
+
+  it('keeps adjacent identical references as separate source-backed units', () => {
+    const source = `[[Note|ref]]${formatMagicComment({ metadata: { kind: 'source' } })}`
+    const chunks = inlineTextToMarkChunks(getMarkBuilders(), source.repeat(2), {
+      resolveWikilink: () => ({ appearance: 'reference' }),
+    })
+    expect(chunks.map(([from, to]) => [from, to])).toEqual([
+      [0, source.length],
+      [source.length, source.length * 2],
+    ])
+  })
+
+  it.each([
+    '<!-- {bad json} -->',
+    '<!-- {"metadata":null} -->',
+    '<!-- {"unknown":true} -->',
+    '<!-- {"metadata":{"unknown":true}} -->',
+  ])('leaves unrecognized or unresolved sidecars readable: %s', (comment) => {
+    const source = `[[Note|ref]]${comment}`
+    const chunks = inlineTextToMarkChunks(getMarkBuilders(), source, {
+      resolveWikilink: () => ({ display: 'ref' }),
+    })
+    expect(chunks[0][1]).toBe('[[Note|ref]]'.length)
+    expect(chunks.at(-1)?.[2]).toEqual([])
+    expect(chunks.at(-1)?.[1]).toBe(source.length)
+  })
+
+  it('does not associate metadata separated from a wikilink by whitespace', () => {
+    const resolveWikilink = vi.fn()
+    parse('[[Note]] <!-- {"metadata":{"kind":"source"}} -->', { resolveWikilink })
+    expect(resolveWikilink).toHaveBeenCalledWith({ target: 'Note' })
+  })
+
+  it.each(['\n', '\r\n', '\r'])(
+    'leaves multiline sidecars unclaimed with line ending %j',
+    (newline) => {
+      const link = '[[Note|ref]]'
+      const source = `${link}<!-- {"metadata":${newline}{"source":true}} -->`
+      const resolveWikilink = vi.fn(() => ({ appearance: 'reference' as const }))
+      const chunks = inlineTextToMarkChunks(getMarkBuilders(), source, { resolveWikilink })
+      expect(resolveWikilink).toHaveBeenCalledWith({ target: 'Note|ref' })
+      expect(chunks.map(([from, to]) => [from, to])).toEqual([
+        [0, link.length],
+        [link.length, source.length],
+      ])
+      expect(chunks[1][2]).toEqual([])
+    },
+  )
+
+  it('folds only the first claimed sidecar and keeps later recognized metadata visible', () => {
+    const first = `[[Note|ref]]${formatMagicComment({ metadata: { source: true } })}`
+    const next = formatMagicComment({ metadata: { unrelated: true } })
+    const chunks = inlineTextToMarkChunks(getMarkBuilders(), first + next, {
+      resolveWikilink: () => ({ appearance: 'reference' }),
+    })
+    expect(chunks.map(([from, to]) => [from, to])).toEqual([
+      [0, first.length],
+      [first.length, first.length + next.length],
+    ])
+    expect(chunks[1][2]).toEqual([])
+  })
+
   it('wikilink', () => {
     expect(parse('a [[note]] b')).toMatchInlineSnapshot(`
       "

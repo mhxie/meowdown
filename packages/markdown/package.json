@@ -26,7 +26,9 @@
   "dependencies": {
     "@lezer/common": "^1.5.2",
     "@lezer/markdown": "^1.7.2",
-    "@post-embed/schema": "^0.5.2"
+    "@post-embed/schema": "^0.5.2",
+    "micromark-util-decode-string": "^2.0.1",
+    "micromark-util-normalize-identifier": "^2.0.1"
   },
   "devDependencies": {
     "@meowdown/vitest": "workspace:*",

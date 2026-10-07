@@ -1,74 +1,25 @@
-import { gfmParser, LEZER_NODE_IDS, type SyntaxNode } from '@meowdown/markdown'
+import {
+  mayBeReferenceDefinition,
+  parseReferenceDefinition,
+  type ReferenceDefinition,
+  type ReferenceDefinitions,
+} from '@meowdown/markdown'
 import type { EditorNode } from '@prosekit/pm/model'
 import type { Transaction } from '@prosekit/pm/state'
 import { AttrStep } from '@prosekit/pm/transform'
-import { decodeString } from 'micromark-util-decode-string'
-import { normalizeIdentifier } from 'micromark-util-normalize-identifier'
 
 import { isNodeOfType } from './node-names.ts'
 
-export interface ReferenceDefinition {
-  key: string
-  href: string
-  title: string
-}
-
-export type ReferenceDefinitions = ReadonlyMap<string, ReferenceDefinition>
+export {
+  parseReferenceDefinition,
+  normalizeReferenceLabel,
+  type ReferenceDefinition,
+  type ReferenceDefinitions,
+} from '@meowdown/markdown'
 
 export interface ReferenceDefinitionIndex {
   definitions: ReferenceDefinitions
   nodes: ReadonlySet<EditorNode>
-}
-
-const MAX_DEFINITION_LENGTH = 1_024
-
-export function normalizeReferenceLabel(label: string): string {
-  return normalizeIdentifier(label)
-}
-
-function mayBeReferenceDefinition(text: string): boolean {
-  if (text.length > MAX_DEFINITION_LENGTH) return false
-  const first = text.search(/\S/)
-  if (first < 0 || text.charCodeAt(first) !== 91) return false
-  return text.includes(']:', first + 1)
-}
-
-function getReferenceNode(text: string): SyntaxNode | undefined {
-  if (!mayBeReferenceDefinition(text)) return
-
-  const root = gfmParser.parse(text).topNode
-  const reference = root.firstChild
-  if (reference?.type.id !== LEZER_NODE_IDS.LinkReference) return
-  if (reference.nextSibling != null) return
-  return reference
-}
-
-function decodeDestination(raw: string): string {
-  const value = raw.startsWith('<') && raw.endsWith('>') ? raw.slice(1, -1) : raw
-  return decodeString(value)
-}
-
-function decodeTitle(raw: string): string {
-  return raw.length < 2 ? '' : decodeString(raw.slice(1, -1))
-}
-
-export function parseReferenceDefinition(text: string): ReferenceDefinition | undefined {
-  const reference = getReferenceNode(text)
-  if (reference == null) return
-
-  const label = reference.getChild('LinkLabel')
-  const destination = reference.getChild('URL')
-  if (label == null || destination == null) return
-
-  const key = normalizeReferenceLabel(text.slice(label.from + 1, label.to - 1))
-  if (key === '') return
-
-  const title = reference.getChild('LinkTitle')
-  return {
-    key,
-    href: decodeDestination(text.slice(destination.from, destination.to)),
-    title: title == null ? '' : decodeTitle(text.slice(title.from, title.to)),
-  }
 }
 
 function isDefinitionContainer(parent: EditorNode | null, index: number): boolean {

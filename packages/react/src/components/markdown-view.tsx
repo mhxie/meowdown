@@ -45,7 +45,7 @@ import {
 import { registerXPost, X_POST_MEDIA_CLICK } from '@meowdown/embed/x'
 import { registerYouTubeVideo, YOUTUBE_VIDEO_CLICK } from '@meowdown/embed/youtube'
 import { matchEmbed, type EmbedKind } from '@meowdown/markdown'
-import type { DOMOutputSpec } from '@prosekit/pm/model'
+import type { DOMOutputSpec, Fragment as ProseMirrorFragment } from '@prosekit/pm/model'
 import { Mark, type Node as ProseMirrorNode } from '@prosekit/pm/model'
 import { clsx } from 'clsx/lite'
 import {
@@ -58,6 +58,7 @@ import {
   useMemo,
   useState,
   type MouseEvent,
+  type KeyboardEvent,
   type ReactElement,
   type ReactNode,
 } from 'react'
@@ -111,6 +112,47 @@ export interface TaskClickPayload {
  * source and re-render, exactly like the other click handlers.
  */
 export type TaskClickHandler = (payload: TaskClickPayload) => void
+
+/**
+ * A block available for host presentation. The node retains its original
+ * inline Markdown (or code body) in `textContent`.
+ */
+export interface MarkdownBlockRenderContext {
+  readonly node: ProseMirrorNode
+  /**
+   * The full source document and this block's ProseMirror position within it.
+   */
+  readonly doc: ProseMirrorNode
+  readonly position: number
+  /**
+   * Direct source siblings, including blocks omitted by the built-in renderer.
+   */
+  readonly previousSibling: ProseMirrorNode | null
+  readonly nextSibling: ProseMirrorNode | null
+  readonly interactive: boolean
+  /**
+   * Render the built-in presentation, including custom renderers of child blocks.
+   * Optional content replaces the rendered fragment of a textblock only when
+   * valid for its schema. Other replacements are ignored, preserving source
+   * block structure and task indexes. The source node and attributes stay intact.
+   */
+  readonly renderDefault: (content?: ProseMirrorFragment) => ReactNode
+  /**
+   * Render a textblock's inline content without adding a paragraph or heading wrapper.
+   */
+  readonly renderInline: (content?: ProseMirrorFragment) => ReactNode
+  /**
+   * Clip parsed runs from the original block, retaining enclosing emphasis and link styles.
+   */
+  readonly renderInlineRange: (from: number, to: number) => ReactNode
+}
+
+/**
+ * Customize a block without changing its Markdown. Return `undefined` to use
+ * the built-in presentation, or `null` to omit it. Must be pure; callbacks are
+ * not a document-order traversal and rendered blocks can be memoized.
+ */
+export type MarkdownBlockRenderer = (context: MarkdownBlockRenderContext) => ReactNode | undefined
 
 export interface MarkdownViewProps {
   /**
@@ -234,6 +276,11 @@ export interface MarkdownViewProps {
    */
   onTaskClick?: TaskClickHandler
   /**
+   * Customize individual blocks. Pass a stable function; return `undefined`
+   * for blocks the built-in renderer should handle.
+   */
+  renderBlock?: MarkdownBlockRenderer
+  /**
    * Extra class on the content root (alongside `ProseMirror meowdown-content`).
    */
   className?: string
@@ -266,9 +313,12 @@ interface BlockContext {
   onImageClick?: ImageClickHandler
   onFileClick?: FileClickHandler
   onTaskClick?: TaskClickHandler
+  renderBlock?: MarkdownBlockRenderer
 }
 
 interface RenderContext extends BlockContext {
+  doc: ProseMirrorNode
+  position: number
   referenceDefinitions: ReferenceDefinitions
   /**
    * Document-order checkbox counter feeding {@link TaskClickPayload.index}.
@@ -337,10 +387,14 @@ function outputSpecToReact(
 function WikilinkChip(props: {
   target: string
   display: string
+  appearance: 'reference' | null
+  description: string
   onWikilinkClick?: WikilinkClickHandler
   children: ReactNode
 }): ReactElement {
-  const { target, display, onWikilinkClick, children } = props
+  const { target, display, appearance, description, onWikilinkClick, children } = props
+  const reference = appearance === 'reference'
+  const label = display || target
   const handleClick = onWikilinkClick
     ? (event: MouseEvent) => {
         return onWikilinkClick({
@@ -350,16 +404,33 @@ function WikilinkChip(props: {
         })
       }
     : undefined
+  const handleKeyDown =
+    reference && onWikilinkClick
+      ? (event: KeyboardEvent) => {
+          if (event.key !== 'Enter') return
+          event.preventDefault()
+          onWikilinkClick({ target, event: event.nativeEvent, mod: isModEvent(event) })
+        }
+      : undefined
   return (
     <span className="md-wikilink-view md-atom-view">
       <span
-        className="md-wikilink-view-preview md-atom-view-preview"
+        className={clsx(
+          'md-wikilink-view-preview md-atom-view-preview',
+          reference && 'meowdown-reference',
+        )}
         data-testid="wikilink"
         contentEditable={false}
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        role={reference && onWikilinkClick ? 'link' : undefined}
+        tabIndex={reference && onWikilinkClick ? 0 : undefined}
+        aria-label={reference ? label : undefined}
+        aria-description={reference && description ? description : undefined}
+        title={reference ? [label, description].filter(Boolean).join('\n') : undefined}
       >
         <span className="md-wikilink-view-label" contentEditable={false}>
-          {display || target}
+          {label}
         </span>
       </span>
       <span className="md-wikilink-view-content md-atom-view-content">{children}</span>
@@ -736,6 +807,8 @@ function wrapMark(mark: Mark, children: ReactNode, context: RenderContext): Reac
         <WikilinkChip
           target={attrs.target}
           display={attrs.display}
+          appearance={attrs.appearance}
+          description={attrs.description}
           onWikilinkClick={context.onWikilinkClick}
         >
           {children}
@@ -840,7 +913,12 @@ function renderRuns(
 /**
  * Parse a textblock's source into runs of text sharing one mark set.
  */
-function parseInlineRuns(node: ProseMirrorNode, context: RenderContext): InlineRun[] {
+function parseInlineRuns(
+  node: ProseMirrorNode,
+  context: RenderContext,
+  start = 0,
+  end = node.textContent.length,
+): InlineRun[] {
   const text = node.textContent
   if (!text) return []
   const chunks: readonly MarkChunk[] = inlineTextToMarkChunksWithContext(
@@ -855,10 +933,12 @@ function parseInlineRuns(node: ProseMirrorNode, context: RenderContext): InlineR
   )
   // Sort each chunk's marks into ProseMirror's canonical order so the grouping
   // and nesting match the editor.
-  return chunks.map(([from, to, marks]): InlineRun => ({
-    text: text.slice(from, to),
-    marks: Mark.setFrom(marks),
-  }))
+  return chunks
+    .filter(([from, to]) => from < end && to > start)
+    .map(([from, to, marks]): InlineRun => ({
+      text: text.slice(Math.max(start, from), Math.min(end, to)),
+      marks: Mark.setFrom(marks),
+    }))
 }
 
 function renderInline(runs: InlineRun[], context: RenderContext): ReactNode {
@@ -913,9 +993,59 @@ function renderBlock(
   context: RenderContext,
   parent: ProseMirrorNode | null,
   index: number,
+  previousSibling: ProseMirrorNode | null = parent && index > 0 ? parent.child(index - 1) : null,
+  nextSibling: ProseMirrorNode | null = parent?.maybeChild(index + 1) ?? null,
 ): ReactNode {
   if (!context.inline && isReferenceDefinitionNode(node, parent, index)) return null
 
+  const taskBase = context.taskCounter.value
+  let rendered = false
+  let defaultResult: ReactNode
+  const renderDefault = (content?: ProseMirrorFragment): ReactNode => {
+    if (
+      content !== undefined &&
+      content !== node.content &&
+      node.isTextblock &&
+      node.type.validContent(content)
+    ) {
+      return renderDefaultBlock(node.copy(content), {
+        ...context,
+        taskCounter: { value: taskBase },
+      })
+    }
+    if (!rendered) {
+      rendered = true
+      defaultResult = renderDefaultBlock(node, context)
+    }
+    return defaultResult
+  }
+  const customized = context.renderBlock?.({
+    node,
+    doc: context.doc,
+    position: context.position,
+    previousSibling,
+    nextSibling,
+    interactive: context.interactive,
+    renderDefault,
+    renderInline: (content = node.content) => {
+      return node.isTextblock && node.type.validContent(content)
+        ? renderInline(parseInlineRuns(node.copy(content), context), context)
+        : null
+    },
+    renderInlineRange: (from, to) => {
+      return node.isTextblock
+        ? renderInline(parseInlineRuns(node, context, from, to), context)
+        : null
+    },
+  })
+  if (customized !== undefined) {
+    context.taskCounter.value = taskBase + countTaskItems(node)
+    return <Fragment key={context.keyCounter.value++}>{customized}</Fragment>
+  }
+  return renderDefault()
+}
+
+function renderDefaultBlock(node: ProseMirrorNode, context: RenderContext): ReactNode {
   const key = context.keyCounter.value++
   const typeName = node.type.name as NodeName
 
@@ -960,8 +1090,11 @@ function renderBlock(
     )
   }
 
-  const children: ReactNode[] = node.content.content.map((child, childIndex) => {
-    return renderBlock(child, context, node, childIndex)
+  const children: ReactNode[] = []
+  node.forEach((child, offset, childIndex) => {
+    children.push(
+      renderBlock(child, { ...context, position: context.position + 1 + offset }, node, childIndex),
+    )
   })
 
   const reactNode = toDOM ? (
@@ -1014,6 +1147,10 @@ function definitionsSignature(definitions: ReferenceDefinitions): string {
 
 interface Block {
   node: ProseMirrorNode
+  doc: ProseMirrorNode
+  position: number
+  previousSibling: ProseMirrorNode | null
+  nextSibling: ProseMirrorNode | null
   /**
    * Checkboxes rendered by the blocks before this one.
    */
@@ -1023,47 +1160,69 @@ interface Block {
 function splitBlocks(doc: ProseMirrorNode): Block[] {
   const blocks: Block[] = []
   let taskBase = 0
-  for (const node of doc.content.content) {
-    blocks.push({ node, taskBase })
+  let position = 0
+  for (const [index, node] of doc.content.content.entries()) {
+    blocks.push({
+      node,
+      doc,
+      position,
+      previousSibling: index > 0 ? doc.child(index - 1) : null,
+      nextSibling: doc.maybeChild(index + 1),
+      taskBase,
+    })
     taskBase += countTaskItems(node)
+    position += node.nodeSize
   }
   return blocks
 }
 
-interface MarkdownBlockProps {
-  node: ProseMirrorNode
-  taskBase: number
+interface MarkdownBlockProps extends Block {
   context: BlockContext
   referenceDefinitions: ReferenceDefinitions
   definitionsKey: string
 }
 
+function nodesEqual(a: ProseMirrorNode | null, b: ProseMirrorNode | null): boolean {
+  return a === b || (a !== null && b !== null && a.eq(b))
+}
+
 /**
  * One top-level block. Memoized on the block's own content (`Node.eq`), its
  * first checkbox index, the shared props object, and the definitions'
- * content, so a growing document re-renders only the block that changed.
+ * content. A custom renderer can also depend on the adjacent source blocks.
  */
 const MarkdownBlock = memo(
   function MarkdownBlock({
     node,
+    doc,
+    position,
+    previousSibling,
+    nextSibling,
     taskBase,
     context,
     referenceDefinitions,
   }: MarkdownBlockProps): ReactNode {
     const renderContext: RenderContext = {
       ...context,
+      doc,
+      position,
       referenceDefinitions,
       taskCounter: { value: taskBase },
       keyCounter: { value: 0 },
     }
-    return renderBlock(node, renderContext, null, 0)
+    return renderBlock(node, renderContext, null, 0, previousSibling, nextSibling)
   },
   (previous, next) => {
     return (
       previous.taskBase === next.taskBase &&
       previous.context === next.context &&
       previous.definitionsKey === next.definitionsKey &&
-      (previous.node === next.node || previous.node.eq(next.node))
+      nodesEqual(previous.node, next.node) &&
+      (!next.context.renderBlock ||
+        (previous.doc === next.doc &&
+          previous.position === next.position &&
+          nodesEqual(previous.previousSibling, next.previousSibling) &&
+          nodesEqual(previous.nextSibling, next.nextSibling)))
     )
   },
 )
@@ -1105,6 +1264,7 @@ export function MarkdownView({
   onYouTubeVideoClick,
   onFileClick,
   onTaskClick,
+  renderBlock: renderBlockOverride,
   className,
 }: MarkdownViewProps): ReactElement {
   const context = useMemo<BlockContext>(
@@ -1128,6 +1288,7 @@ export function MarkdownView({
       onImageClick: interactive ? onImageClick : undefined,
       onFileClick: interactive ? onFileClick : undefined,
       onTaskClick: interactive ? onTaskClick : undefined,
+      renderBlock: renderBlockOverride,
     }),
     [
       inline,
@@ -1149,6 +1310,7 @@ export function MarkdownView({
       onImageClick,
       onFileClick,
       onTaskClick,
+      renderBlockOverride,
     ],
   )
 
@@ -1194,10 +1356,14 @@ export function MarkdownView({
       className={clsx('ProseMirror', 'meowdown-content', className)}
       data-mark-mode={markMode}
     >
-      {blocks.map(({ node, taskBase }, index) => (
+      {blocks.map(({ node, doc, position, previousSibling, nextSibling, taskBase }, index) => (
         <MarkdownBlock
           key={index}
           node={node}
+          doc={doc}
+          position={position}
+          previousSibling={previousSibling}
+          nextSibling={nextSibling}
           taskBase={taskBase}
           context={context}
           referenceDefinitions={referenceDefinitions}

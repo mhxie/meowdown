@@ -167,6 +167,7 @@
    * ------------------------------------------------------------------------- */
   .ProseMirror {
     box-sizing: border-box;
+    counter-reset: meowdown-reference;
     outline: none;
     font-size: 1.0625rem;
     line-height: 1.7;
@@ -1107,6 +1108,18 @@
 
   /* wikilink */
   .ProseMirror {
+    .md-wikilink-view:has(.md-wikilink-source-editing) {
+      > .md-wikilink-view-preview {
+        display: none;
+      }
+
+      > .md-wikilink-view-content {
+        font-size: inherit;
+        letter-spacing: inherit;
+        opacity: 1;
+      }
+    }
+
     .md-note-embed-source {
       margin: 0;
       font-size: 0;
@@ -1118,6 +1131,38 @@
       outline: 2px solid var(--meowdown-node-outline);
       outline-offset: 2px;
       border-radius: 6px;
+    }
+
+    /* Shared with host-rendered references, in one counter per content root. */
+    .meowdown-reference {
+      counter-increment: meowdown-reference;
+      color: var(--meowdown-accent);
+      font-size: 0.75em;
+      line-height: 0;
+      vertical-align: super;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .meowdown-reference::before {
+      content: '[' counter(meowdown-reference) ']';
+    }
+
+    .meowdown-reference:focus-visible {
+      outline: 2px solid var(--meowdown-accent);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
+    .meowdown-reference .md-wikilink-view-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
 
     /* A plain inline, not the shared inline-block in .md-atom-view-preview */

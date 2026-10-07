@@ -6,6 +6,7 @@ import { defineClipboardParser } from './clipboard-parser.ts'
 import { defineSemanticClipboardSerializer } from './clipboard-serializer.ts'
 import { definePlainTextPaste } from './plain-paste.ts'
 import { definePlainTextSerializer } from './plain-text.ts'
+import { defineReferenceClipboard } from './reference-transport.ts'
 
 /**
  * The clipboard pipeline: semantic HTML with `data-md` round-trip attributes
@@ -17,6 +18,7 @@ export function defineClipboard(): PlainExtension {
   return union(
     defineSemanticClipboardSerializer(),
     definePlainTextSerializer(),
+    defineReferenceClipboard(),
     defineClipboardParser(),
     defineHTMLPaste(),
     definePlainTextPaste(),
