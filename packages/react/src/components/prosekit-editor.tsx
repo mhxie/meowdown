@@ -53,6 +53,7 @@ import {
 
 import { defineCodeBlockView } from '../extensions/code-block-view.ts'
 import type { TimeFormat } from '../utils/date-format.ts'
+import { markHostContent } from '../utils/host-content.ts'
 
 import { BlockHandle } from './block-handle.tsx'
 import { DropIndicator } from './drop-indicator.tsx'
@@ -595,7 +596,7 @@ export function ProseKitEditor({
         // refreshMarkdownRendering forces the replacement when a caller
         // explicitly needs one.
         if (forceMarkdown || currentMarkdown !== nextMarkdown) {
-          transaction.replaceWith(0, transaction.doc.content.size, doc.content)
+          markHostContent(transaction.replaceWith(0, transaction.doc.content.size, doc.content))
         } else if (!selection) {
           return
         }
