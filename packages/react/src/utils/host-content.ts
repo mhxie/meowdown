@@ -13,7 +13,9 @@ export function markHostContent(transaction: Transaction): Transaction {
  * Whether `transaction` replaced the document with Markdown the host supplied
  * through `setMarkdown`, `setState`, or `refreshMarkdownRendering`, rather than
  * an edit made in the editor. Plugins that react to the person's edits (for
- * example, recording that edited text needs review) skip these.
+ * example, recording that edited text needs review) skip these. A plugin's
+ * follow-up counts too, but only from `state.apply` or `appendTransaction`:
+ * ProseMirror links it to its root after `filterTransaction`.
  */
 export function isHostContentTransaction(transaction: Transaction): boolean {
   // A plugin's follow-up to a replacement (re-marking inline syntax, say)
