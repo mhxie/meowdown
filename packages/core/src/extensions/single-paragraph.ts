@@ -1,46 +1,35 @@
 import { definePlugin, Priority, withPriority, type PlainExtension } from '@prosekit/core'
-import { Plugin, PluginKey, TextSelection } from '@prosekit/pm/state'
+import { Plugin, PluginKey, TextSelection, type EditorState } from '@prosekit/pm/state'
 
 import { docToParagraphMarkdown, paragraphMarkdownToDoc } from '../converters/paragraph.ts'
 
+import { getEditorConfig } from './editor-config-getter.ts'
 import { isNodeOfType } from './node-names.ts'
 import { getNodeBuildersForSchema } from './schema.ts'
 
-export const singleParagraphPluginKey = new PluginKey('single-paragraph')
+const singleParagraphPluginKey = new PluginKey('single-paragraph')
 
 /**
- * Keep editing and pasted content within one paragraph.
- * Opt into this extension for inline Markdown fields such as task paragraphs.
- * Register it alongside `defineMeowdown`, seed content with
- * `paragraphMarkdownToDoc`, and read edits with `docToParagraphMarkdown`.
- * Ordinary note editors should keep their full document behavior.
- *
- * Text input stays literal, before block input rules can consume prefixes.
- * Transactions and pasted blocks flatten to paragraph text separated by soft
- * lines. Reference definitions come from `referenceDefinitions` in the editor
- * config; definition-looking content in the field remains visible literal text.
- * Enter/submit, focus, and persistence remain the caller's responsibility.
- *
- * @example
- * const editor = createEditor({
- *   extension: union(defineMeowdown({ referenceDefinitions }), defineSingleParagraph()),
- *   defaultContent: paragraphMarkdownToDoc('Buy **milk**'),
- * })
- * const markdown = docToParagraphMarkdown(editor.state.doc)
+ * Whether the editor holds one paragraph of inline Markdown (the
+ * `singleParagraph` editor config option).
+ */
+export function isSingleParagraph(state: EditorState): boolean {
+  return !!getEditorConfig(state).singleParagraph
+}
+
+/**
+ * Keep the document to one paragraph while `singleParagraph` is set. Input
+ * rules and enter rules that open a block stay inert on their own (see
+ * `block-rule.ts`); this flattens what still arrives as blocks, such as a
+ * paste or a command, into paragraph text separated by soft lines.
  */
 export function defineSingleParagraph(): PlainExtension {
   return withPriority(
     definePlugin(
       new Plugin({
         key: singleParagraphPluginKey,
-        props: {
-          handleTextInput(view, from, to, text) {
-            // Raw paragraph editing must run before block input rules consume syntax.
-            view.dispatch(view.state.tr.insertText(text, from, to))
-            return true
-          },
-        },
         appendTransaction(transactions, _oldState, state) {
+          if (!isSingleParagraph(state)) return
           if (!transactions.some((transaction) => transaction.docChanged)) return
           const markdown = docToParagraphMarkdown(state.doc)
           if (
