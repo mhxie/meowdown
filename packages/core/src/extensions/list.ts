@@ -14,27 +14,37 @@ import { defineInputRule } from '@prosekit/extensions/input-rule'
 import {
   defineListCommands,
   defineListDropIndicator,
-  defineListKeymap,
   defineListSpec,
   toggleList,
   wrapInList,
   type ListAttrs,
 } from '@prosekit/extensions/list'
+import { chainCommands, deleteSelection } from '@prosekit/pm/commands'
 import type { ProseMirrorNode } from '@prosekit/pm/model'
 import type { Command, EditorState } from '@prosekit/pm/state'
 import { Plugin } from '@prosekit/pm/state'
 import {
+  createDedentListCommand,
+  createIndentListCommand,
   createListRenderingPlugin,
   createSafariInputMethodWorkaroundPlugin,
+  createSplitListCommand,
   createToggleCollapsedCommand,
   defaultAttributesGetter,
+  deleteCommand,
   findCheckboxInListItem,
   handleListMarkerMouseDown,
+  joinCollapsedListBackward,
   joinListElements,
+  joinListUp,
   listToDOM,
+  protectCollapsed,
   unwrapListSlice,
   wrappingListInputRule,
+  type DedentListOptions,
+  type IndentListOptions,
   type ListClickHandler,
+  type SplitListOptions,
 } from 'prosemirror-flat-list'
 
 import { isNodeOfType, type NodeName } from './node-names.ts'
@@ -369,6 +379,18 @@ function toggleListCollapsed(): Command {
   return createToggleCollapsedCommand({ isToggleable: isCollapsibleBullet })
 }
 
+function indentList(options?: IndentListOptions): Command {
+  return createIndentListCommand({ strict: true, ...options })
+}
+
+function dedentList(options?: DedentListOptions): Command {
+  return createDedentListCommand({ strict: true, ...options })
+}
+
+function splitList(options?: SplitListOptions): Command {
+  return createSplitListCommand({ strict: true, ...options })
+}
+
 function defineMeowdownListCommands() {
   return defineCommands({
     cycleCheckableList,
@@ -376,6 +398,9 @@ function defineMeowdownListCommands() {
     wrapInCircleTask,
     wrapInSquareTask,
     toggleListCollapsed,
+    indentList,
+    dedentList,
+    splitList,
   })
 }
 
@@ -470,6 +495,18 @@ function defineMeowdownListPlugins(): PlainExtension {
 
 function defineMeowdownListKeymap(): PlainExtension {
   return defineKeymap({
+    Enter: chainCommands(protectCollapsed, splitList()),
+    Backspace: chainCommands(
+      protectCollapsed,
+      deleteSelection,
+      joinListUp,
+      joinCollapsedListBackward,
+    ),
+    Delete: deleteCommand,
+    Tab: indentList(),
+    'Shift-Tab': dedentList(),
+    'Mod-]': indentList(),
+    'Mod-[': dedentList(),
     'Mod-Enter': rotateSquareTask(),
     'Mod-Shift-Enter': rotateCircleTask(),
     'Mod-.': createToggleCollapsedCommand({ isToggleable: isCollapsibleBullet }),
@@ -489,7 +526,6 @@ export function defineMeowdownList() {
   return union(
     defineListSpec(),
     defineMeowdownListPlugins(),
-    defineListKeymap(),
     defineListCommands(),
     defineMeowdownListSerializer(),
     defineListDropIndicator(),
