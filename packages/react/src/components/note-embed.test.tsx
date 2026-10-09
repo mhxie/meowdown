@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 
-import { MeowdownEditor } from './editor.tsx'
+import { MarkdownEditor } from './editor.tsx'
 import { MarkdownView } from './markdown-view.tsx'
 import type { NoteEmbedPayload } from './note-embed.ts'
 import type { EditorHandle } from './types.ts'
@@ -40,7 +40,7 @@ describe('host note embeds', () => {
     const source = 'Before\n\n![[Original|Read original]]\n\nAfter'
     await render(
       <ReaderContext value="Host provider">
-        <MeowdownEditor
+        <MarkdownEditor
           initialMarkdown={source}
           resolveWikiEmbed={resolveWikiEmbed}
           renderNoteEmbed={renderNoteEmbed}
@@ -65,7 +65,7 @@ describe('host note embeds', () => {
     const onDocChange = vi.fn()
     const onWikilinkClick = vi.fn()
     await render(
-      <MeowdownEditor
+      <MarkdownEditor
         initialMarkdown="![[Original]]"
         resolveWikiEmbed={resolveWikiEmbed}
         renderNoteEmbed={renderNoteEmbed}
@@ -87,7 +87,7 @@ describe('host note embeds', () => {
   it('rebuilds DOM when a paragraph changes between ordinary text and an embed', async () => {
     const editor = createRef<EditorHandle>()
     await render(
-      <MeowdownEditor
+      <MarkdownEditor
         initialMarkdown="Ordinary"
         resolveWikiEmbed={resolveWikiEmbed}
         renderNoteEmbed={renderNoteEmbed}
@@ -107,7 +107,7 @@ describe('host note embeds', () => {
     const editor = createRef<EditorHandle>()
     const onDocChange = vi.fn()
     await render(
-      <MeowdownEditor
+      <MarkdownEditor
         initialMarkdown="![[Original]]"
         resolveWikiEmbed={resolveWikiEmbed}
         renderNoteEmbed={renderNoteEmbed}
@@ -129,7 +129,7 @@ describe('host note embeds', () => {
   it('lets the enclosing editor select and delete the source reference with the keyboard', async () => {
     const editor = createRef<EditorHandle>()
     await render(
-      <MeowdownEditor
+      <MarkdownEditor
         initialMarkdown="![[Original]]"
         resolveWikiEmbed={resolveWikiEmbed}
         renderNoteEmbed={renderNoteEmbed}
@@ -155,7 +155,7 @@ describe('host note embeds', () => {
     const editor = createRef<EditorHandle>()
     await render(
       <>
-        <MeowdownEditor
+        <MarkdownEditor
           initialMarkdown={source}
           resolveWikiEmbed={resolveWikiEmbed}
           renderNoteEmbed={renderNoteEmbed}
@@ -182,7 +182,7 @@ describe('host note embeds', () => {
     }
     const editor = createRef<EditorHandle>()
     await render(
-      <MeowdownEditor
+      <MarkdownEditor
         initialMarkdown="![[Original]]"
         resolveWikiEmbed={resolveWikiEmbed}
         renderNoteEmbed={() => <LifecycleReader />}
@@ -221,7 +221,7 @@ describe('host note embeds', () => {
         />
         <MarkdownView
           markdown="![[Original]]"
-          inline
+          singleParagraph
           resolveWikiEmbed={resolveWikiEmbed}
           renderNoteEmbed={renderer}
         />

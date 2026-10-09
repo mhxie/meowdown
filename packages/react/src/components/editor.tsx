@@ -456,7 +456,7 @@ export interface EditorProps {
  *
  * Callbacks and resolvers should be stable; pass them via `useCallback`.
  */
-export function MeowdownEditor({
+export function MarkdownEditor({
   mode = 'focus',
   initialMarkdown,
   singleParagraph,
