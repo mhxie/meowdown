@@ -16,5 +16,9 @@ export function markHostContent(transaction: Transaction): Transaction {
  * example, recording that edited text needs review) skip these.
  */
 export function isHostContentTransaction(transaction: Transaction): boolean {
-  return transaction.getMeta(HOST_CONTENT_META) === true
+  // A plugin's follow-up to a replacement (re-marking inline syntax, say)
+  // belongs to it, as ProseMirror's history also judges appended steps.
+  const root: unknown = transaction.getMeta('appendedTransaction')
+  const origin = root === undefined ? transaction : (root as Transaction)
+  return origin.getMeta(HOST_CONTENT_META) === true
 }

@@ -145,13 +145,18 @@ describe('ProseKitEditor', () => {
     const seen: { docChanged: boolean; host: boolean }[] = []
     const dispose = editor.use(
       definePlugin(
+        // Observed where consumers read it: ProseMirror links a follow-up to
+        // its root only after filterTransaction.
         new Plugin({
-          filterTransaction: (transaction) => {
-            seen.push({
-              docChanged: transaction.docChanged,
-              host: isHostContentTransaction(transaction),
-            })
-            return true
+          state: {
+            init: () => null,
+            apply: (transaction) => {
+              seen.push({
+                docChanged: transaction.docChanged,
+                host: isHostContentTransaction(transaction),
+              })
+              return null
+            },
           },
         }),
       ),
@@ -163,6 +168,14 @@ describe('ProseKitEditor', () => {
       { docChanged: true, host: true },
       { docChanged: true, host: true },
     ])
+
+    // Formatted Markdown draws a follow-up from the inline mark plugin.
+    seen.length = 0
+    handle.setMarkdown('**World**')
+    const loaded = seen.filter((entry) => entry.docChanged)
+    expect(loaded.length).toBeGreaterThan(1)
+    expect(loaded.every((entry) => entry.host)).toBe(true)
+    handle.setMarkdown('World')
 
     seen.length = 0
     handle.setSelection('end')
