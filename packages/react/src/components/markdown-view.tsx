@@ -167,7 +167,7 @@ export interface MarkdownViewProps {
   /**
    * Interpret content as one paragraph, without block syntax.
    */
-  inline?: boolean
+  singleParagraph?: boolean
   /**
    * Reference definitions available outside this fragment.
    */
@@ -296,7 +296,7 @@ export interface MarkdownViewProps {
  * block's `memo` comparator can test it by identity.
  */
 interface BlockContext {
-  inline: boolean
+  singleParagraph: boolean
   headingOffset: number
   interactive: boolean
   remoteMedia: boolean
@@ -1001,7 +1001,7 @@ function renderBlock(
   previousSibling: ProseMirrorNode | null = parent && index > 0 ? parent.child(index - 1) : null,
   nextSibling: ProseMirrorNode | null = parent?.maybeChild(index + 1) ?? null,
 ): ReactNode {
-  if (!context.inline && isReferenceDefinitionNode(node, parent, index)) return null
+  if (!context.singleParagraph && isReferenceDefinitionNode(node, parent, index)) return null
 
   const taskBase = context.taskCounter.value
   let rendered = false
@@ -1073,7 +1073,7 @@ function renderDefaultBlock(node: ProseMirrorNode, context: RenderContext): Reac
     if (
       typeName === 'paragraph' &&
       context.interactive &&
-      !context.inline &&
+      !context.singleParagraph &&
       context.renderNoteEmbed
     ) {
       const embed = noteEmbedFromRuns(runs)
@@ -1245,7 +1245,7 @@ const MarkdownBlock = memo(
  */
 export function MarkdownView({
   markdown,
-  inline = false,
+  singleParagraph = false,
   referenceDefinitions: suppliedDefinitions,
   markMode = 'hide',
   frontmatter = false,
@@ -1274,7 +1274,7 @@ export function MarkdownView({
 }: MarkdownViewProps): ReactElement {
   const context = useMemo<BlockContext>(
     () => ({
-      inline,
+      singleParagraph,
       headingOffset: normalizeHeadingOffset(headingOffset),
       interactive,
       remoteMedia,
@@ -1296,7 +1296,7 @@ export function MarkdownView({
       renderBlock: renderBlockOverride,
     }),
     [
-      inline,
+      singleParagraph,
       headingOffset,
       interactive,
       remoteMedia,
@@ -1320,8 +1320,12 @@ export function MarkdownView({
   )
 
   const { blocks, referenceDefinitions, definitionsKey } = useMemo(() => {
-    const doc = inline ? paragraphMarkdownToDoc(markdown) : markdownToDoc(markdown, { frontmatter })
-    const localDefinitions = inline ? new Map() : collectReferenceDefinitions(doc).definitions
+    const doc = singleParagraph
+      ? paragraphMarkdownToDoc(markdown)
+      : markdownToDoc(markdown, { frontmatter })
+    const localDefinitions = singleParagraph
+      ? new Map()
+      : collectReferenceDefinitions(doc).definitions
     const referenceDefinitions = suppliedDefinitions
       ? new Map([...suppliedDefinitions, ...localDefinitions])
       : localDefinitions
@@ -1330,7 +1334,7 @@ export function MarkdownView({
       referenceDefinitions,
       definitionsKey: definitionsSignature(referenceDefinitions),
     }
-  }, [markdown, frontmatter, inline, suppliedDefinitions])
+  }, [markdown, frontmatter, singleParagraph, suppliedDefinitions])
 
   // The cards' events bubble, so one listener each on the root covers every card.
   const handleXPostMediaClick = interactive ? onXPostMediaClick : undefined
