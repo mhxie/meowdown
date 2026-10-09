@@ -30,6 +30,7 @@ export {
   type LightboxVideoItem,
 } from './hooks/use-lightbox.ts'
 export type { TimeFormat } from './utils/date-format.ts'
+export { isHostContentTransaction } from './utils/host-content.ts'
 export type {
   EditorHandle,
   EditorStateSnapshot,

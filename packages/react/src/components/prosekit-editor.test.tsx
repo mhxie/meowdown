@@ -1,10 +1,14 @@
 import '../testing/index.ts'
 
 import { getEditorConfig } from '@meowdown/core'
+import { definePlugin } from '@prosekit/core'
+import { Plugin } from '@prosekit/pm/state'
 import { createRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
+
+import { isHostContentTransaction } from '../utils/host-content.ts'
 
 import { ProseKitEditor } from './prosekit-editor.tsx'
 import type { EditorHandle } from './types.ts'
@@ -129,6 +133,60 @@ describe('ProseKitEditor', () => {
     expect(editor.state.doc.child(1).textContent).toBe('**Links**')
     expect(editor.state.selection.$from.parent).toBe(editor.state.doc.child(1))
     expect(editor.state.selection.$from.parentOffset).toBe(0)
+  })
+
+  it('tags host replacements, but not selection changes or typing', async () => {
+    const ref = createRef<EditorHandle>()
+    const screen = await render(<ProseKitEditor ref={ref} initialMarkdown="Hello" />)
+    await expect.element(screen.getByText('Hello')).toBeInTheDocument()
+    const handle = ref.current
+    const editor = handle?.getEditor()
+    if (!handle || !editor) throw new Error('editor not mounted')
+    const seen: { docChanged: boolean; host: boolean }[] = []
+    const dispose = editor.use(
+      definePlugin(
+        // Observed where consumers read it: ProseMirror links a follow-up to
+        // its root only after filterTransaction.
+        new Plugin({
+          state: {
+            init: () => null,
+            apply: (transaction) => {
+              seen.push({
+                docChanged: transaction.docChanged,
+                host: isHostContentTransaction(transaction),
+              })
+              return null
+            },
+          },
+        }),
+      ),
+    )
+
+    handle.setMarkdown('World')
+    handle.refreshMarkdownRendering()
+    expect(seen.filter((entry) => entry.docChanged)).toEqual([
+      { docChanged: true, host: true },
+      { docChanged: true, host: true },
+    ])
+
+    // Formatted Markdown draws a follow-up from the inline mark plugin.
+    seen.length = 0
+    handle.setMarkdown('**World**')
+    const loaded = seen.filter((entry) => entry.docChanged)
+    expect(loaded.length).toBeGreaterThan(1)
+    expect(loaded.every((entry) => entry.host)).toBe(true)
+    handle.setMarkdown('World')
+
+    seen.length = 0
+    handle.setSelection('end')
+    expect(seen).toEqual([{ docChanged: false, host: false }])
+
+    seen.length = 0
+    handle.focus()
+    await userEvent.keyboard('!')
+    await expect.element(screen.getByText('World!')).toBeInTheDocument()
+    expect(seen.filter((entry) => entry.docChanged)).toEqual([{ docChanged: true, host: false }])
+    dispose()
   })
 
   it('fires onDocChange for insertMarkdown, unlike setMarkdown', async () => {
