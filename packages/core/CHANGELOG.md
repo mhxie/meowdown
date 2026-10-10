@@ -1,5 +1,21 @@
 # @meowdown/core
 
+## 0.80.0
+
+### Minor Changes
+
+- [#685](https://github.com/prosekit/meowdown/pull/685) [`810377a`](https://github.com/prosekit/meowdown/commit/810377a97a5f7eb43de0c10463e700e94d8337a9) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Single-paragraph editing is now the `singleParagraph` editor config option: block input rules and enter rules stay quiet while it is set, so typed `# `, `> `, `- ` and fences stay literal while the `[[` and `#` menus and substitutions keep working. `defineSingleParagraph` is no longer exported from `@meowdown/core`; `MarkdownEditor`'s `singleParagraph` prop sets the option.
+
+## 0.79.0
+
+### Minor Changes
+
+- [#682](https://github.com/prosekit/meowdown/pull/682) [`b099aae`](https://github.com/prosekit/meowdown/commit/b099aaecacd1580b8548d1f28bdfc9e97dc7e1fe) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Add the `backspaceDeletesEmptyFirstBlock` option. When it is on, Backspace in an empty paragraph that is the document's first block deletes that paragraph and keeps the block after it unchanged.
+
+### Patch Changes
+
+- [#684](https://github.com/prosekit/meowdown/pull/684) [`a4fc5c6`](https://github.com/prosekit/meowdown/commit/a4fc5c6c28e407736873cd2132f518b0c4f493c4) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Tab on the first item of a list no longer writes `+ [ ] + [ ] text` because list commands now run in prosemirror-flat-list's strict mode.
+
 ## 0.78.4
 
 ### Patch Changes
