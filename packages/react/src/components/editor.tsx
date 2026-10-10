@@ -360,6 +360,13 @@ export interface EditorProps {
   bulletAfterHeading?: boolean
 
   /**
+   * Pressing Backspace in an empty paragraph that is the document's first
+   * block deletes that paragraph, so the rest of the document moves up one
+   * line. The block after it keeps its type. Off by default.
+   */
+  backspaceDeletesEmptyFirstBlock?: boolean
+
+  /**
    * Replaces typed character sequences with their typographic equivalents,
    * e.g. `->` with `→` and `(c)` with `©`. On by default.
    */
@@ -497,6 +504,7 @@ export function MarkdownEditor({
   remoteMedia = true,
   linkPaste = true,
   bulletAfterHeading = false,
+  backspaceDeletesEmptyFirstBlock = false,
   substitution = true,
   frontmatter = false,
   blockHandle = true,
@@ -654,6 +662,7 @@ export function MarkdownEditor({
         remoteMedia={remoteMedia}
         linkPaste={linkPaste}
         bulletAfterHeading={bulletAfterHeading}
+        backspaceDeletesEmptyFirstBlock={backspaceDeletesEmptyFirstBlock}
         substitution={substitution}
         frontmatter={frontmatter}
         blockHandle={blockHandle}

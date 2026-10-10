@@ -1,13 +1,20 @@
 import { defineNodeAttr, union, type Extension, type PlainExtension } from '@prosekit/core'
 import {
-  defineCodeBlock as defineBaseCodeBlock,
+  codeBlockEnterRule,
+  codeBlockInputRule,
+  defineCodeBlockCommands,
+  defineCodeBlockKeymap,
+  defineCodeBlockSpec,
   type CodeBlockAttrs,
 } from '@prosekit/extensions/code-block'
-import { defineTextBlockEnterRule } from '@prosekit/extensions/enter-rule'
-import { defineTextBlockInputRule } from '@prosekit/extensions/input-rule'
+import {
+  createTextBlockInputRuleHandler,
+  type TextBlockInputRuleOptions,
+} from '@prosekit/extensions/input-rule'
 
 import { parseInteger } from '../utils/parse-integer.ts'
 
+import { defineBlockEnterRule, defineBlockInputRule } from './block-rule.ts'
 import { defineCodeBlockExitKeymap } from './code-block-exit.ts'
 import type { NodeName } from './node-names.ts'
 
@@ -72,16 +79,14 @@ function getTildeFenceAttrs(match: RegExpMatchArray): MeowdownCodeBlockAttrs {
   return { language: match[1] || '', fenceStyle: 'tilde' }
 }
 
-function defineTildeFenceInputRule(): PlainExtension {
-  return defineTextBlockInputRule({
-    regex: /^~~~(\S*)\s$/,
-    type: 'codeBlock' satisfies NodeName,
-    attrs: getTildeFenceAttrs,
-  })
+const tildeFenceInputRule: TextBlockInputRuleOptions = {
+  regex: /^~~~(\S*)\s$/,
+  type: 'codeBlock' satisfies NodeName,
+  attrs: getTildeFenceAttrs,
 }
 
 function defineTildeFenceEnterRule(): PlainExtension {
-  return defineTextBlockEnterRule({
+  return defineBlockEnterRule({
     regex: /^~~~(\S*)$/,
     type: 'codeBlock' satisfies NodeName,
     attrs: getTildeFenceAttrs,
@@ -89,7 +94,7 @@ function defineTildeFenceEnterRule(): PlainExtension {
 }
 
 function defineDollarFenceEnterRule(): PlainExtension {
-  return defineTextBlockEnterRule({
+  return defineBlockEnterRule({
     regex: /^\$\$$/,
     type: 'codeBlock' satisfies NodeName,
     attrs: (): MeowdownCodeBlockAttrs => ({ language: 'math', fenceStyle: 'dollar' }),
@@ -98,10 +103,20 @@ function defineDollarFenceEnterRule(): PlainExtension {
 
 export function defineCodeBlock() {
   return union(
-    defineBaseCodeBlock(),
+    defineCodeBlockSpec(),
+    defineCodeBlockKeymap(),
+    defineCodeBlockCommands(),
+    defineBlockInputRule(
+      codeBlockInputRule.regex,
+      createTextBlockInputRuleHandler(codeBlockInputRule),
+    ),
+    defineBlockEnterRule(codeBlockEnterRule),
     defineFenceStyleAttr(),
     defineFenceLengthAttr(),
-    defineTildeFenceInputRule(),
+    defineBlockInputRule(
+      tildeFenceInputRule.regex,
+      createTextBlockInputRuleHandler(tildeFenceInputRule),
+    ),
     defineTildeFenceEnterRule(),
     defineDollarFenceEnterRule(),
     defineCodeBlockExitKeymap(),

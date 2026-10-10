@@ -10,33 +10,48 @@ import {
   type Extension,
   type PlainExtension,
 } from '@prosekit/core'
-import { defineInputRule } from '@prosekit/extensions/input-rule'
 import {
   defineListCommands,
   defineListDropIndicator,
-  defineListKeymap,
   defineListSpec,
   toggleList,
   wrapInList,
   type ListAttrs,
 } from '@prosekit/extensions/list'
+import { chainCommands, deleteSelection } from '@prosekit/pm/commands'
 import type { ProseMirrorNode } from '@prosekit/pm/model'
 import type { Command, EditorState } from '@prosekit/pm/state'
 import { Plugin } from '@prosekit/pm/state'
 import {
+  createDedentListCommand,
+  createIndentListCommand,
   createListRenderingPlugin,
   createSafariInputMethodWorkaroundPlugin,
+  createSplitListCommand,
   createToggleCollapsedCommand,
   defaultAttributesGetter,
+  deleteCommand,
   findCheckboxInListItem,
   handleListMarkerMouseDown,
+  joinCollapsedListBackward,
   joinListElements,
+  joinListUp,
   listToDOM,
+  protectCollapsed,
   unwrapListSlice,
-  wrappingListInputRule,
+  bulletListInputRule,
+  createListInputRuleHandler,
+  orderedListInputRule,
+  taskListInputRule,
+  type ListAttributes,
+  type ListInputRuleOptions,
+  type DedentListOptions,
+  type IndentListOptions,
   type ListClickHandler,
+  type SplitListOptions,
 } from 'prosemirror-flat-list'
 
+import { defineBlockInputRule } from './block-rule.ts'
 import { isNodeOfType, type NodeName } from './node-names.ts'
 
 /**
@@ -242,41 +257,28 @@ function normalizeTaskList(node: Element): void {
   textBlock.prepend(checkbox)
 }
 
-const listInputRules = [
-  wrappingListInputRule<MeowdownListAttrs>(/^\s?([*-])\s$/, {
-    kind: 'bullet',
-    collapsed: false,
-  }),
-  wrappingListInputRule<MeowdownListAttrs>(/^\s?(\d+)\.\s$/, ({ match }) => {
-    const text = match[1]
-    const num = text ? parseInt(text, 10) : undefined
-    return {
-      kind: 'ordered',
-      collapsed: false,
-      order: num && num >= 2 && Number.isSafeInteger(num) ? num : null,
-    }
-  }),
-  wrappingListInputRule<MeowdownListAttrs>(/^\s?\[([\sX]?)\]\s$/i, ({ match }) => {
-    return {
-      kind: 'task',
-      checked: ['x', 'X'].includes(match[1]),
-      collapsed: false,
-    }
-  }),
-  /**
-   * `+ ` at the start of a block wraps it into an unchecked circle checkbox task.
-   * The square checkbox task keeps ProseKit's default `[ ] ` / `[x] ` input rule.
-   */
-  wrappingListInputRule<MeowdownListAttrs>(/^\s?\+\s$/, {
-    kind: 'task',
-    marker: '+',
-    checked: false,
-    collapsed: false,
-  }),
-]
+// `+ ` at the start of a block wraps it into an unchecked circle checkbox task.
+// The square checkbox task keeps prosemirror-flat-list's `[ ] ` / `[x] ` rule.
+const circleTaskListInputRule: ListInputRuleOptions<MeowdownListAttrs> = {
+  regexp: /^\s?\+\s$/,
+  getAttrs: { kind: 'task', marker: '+', checked: false, collapsed: false },
+}
+
+// A marker opens a list item; in a single paragraph it stays typed text.
+function defineListInputRule<T extends ListAttributes>({
+  regexp,
+  getAttrs,
+}: ListInputRuleOptions<T>): PlainExtension {
+  return defineBlockInputRule(regexp, createListInputRuleHandler(getAttrs))
+}
 
 function defineMeowdownListInputRules(): PlainExtension {
-  return union(listInputRules.map(defineInputRule))
+  return union(
+    defineListInputRule(bulletListInputRule),
+    defineListInputRule(orderedListInputRule),
+    defineListInputRule(taskListInputRule),
+    defineListInputRule(circleTaskListInputRule),
+  )
 }
 
 /**
@@ -369,6 +371,18 @@ function toggleListCollapsed(): Command {
   return createToggleCollapsedCommand({ isToggleable: isCollapsibleBullet })
 }
 
+function indentList(options?: IndentListOptions): Command {
+  return createIndentListCommand({ strict: true, ...options })
+}
+
+function dedentList(options?: DedentListOptions): Command {
+  return createDedentListCommand({ strict: true, ...options })
+}
+
+function splitList(options?: SplitListOptions): Command {
+  return createSplitListCommand({ strict: true, ...options })
+}
+
 function defineMeowdownListCommands() {
   return defineCommands({
     cycleCheckableList,
@@ -376,6 +390,9 @@ function defineMeowdownListCommands() {
     wrapInCircleTask,
     wrapInSquareTask,
     toggleListCollapsed,
+    indentList,
+    dedentList,
+    splitList,
   })
 }
 
@@ -470,6 +487,18 @@ function defineMeowdownListPlugins(): PlainExtension {
 
 function defineMeowdownListKeymap(): PlainExtension {
   return defineKeymap({
+    Enter: chainCommands(protectCollapsed, splitList()),
+    Backspace: chainCommands(
+      protectCollapsed,
+      deleteSelection,
+      joinListUp,
+      joinCollapsedListBackward,
+    ),
+    Delete: deleteCommand,
+    Tab: indentList(),
+    'Shift-Tab': dedentList(),
+    'Mod-]': indentList(),
+    'Mod-[': dedentList(),
     'Mod-Enter': rotateSquareTask(),
     'Mod-Shift-Enter': rotateCircleTask(),
     'Mod-.': createToggleCollapsedCommand({ isToggleable: isCollapsibleBullet }),
@@ -489,7 +518,6 @@ export function defineMeowdownList() {
   return union(
     defineListSpec(),
     defineMeowdownListPlugins(),
-    defineListKeymap(),
     defineListCommands(),
     defineMeowdownListSerializer(),
     defineListDropIndicator(),

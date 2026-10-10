@@ -1,6 +1,5 @@
 import {
   defineEditorExtension,
-  defineSingleParagraph,
   paragraphMarkdownToDoc,
   docToParagraphMarkdown,
   docToMarkdown,
@@ -142,6 +141,11 @@ export interface ProseKitEditorProps {
    * first render is used; later changes are ignored.
    */
   initialMarkdown?: string
+  /**
+   * Edit one paragraph of inline Markdown. Typed block prefixes stay literal
+   * and the `[[` / `#` menus and substitutions keep working. The initial
+   * content and the handle's reads and writes use paragraph Markdown.
+   */
   singleParagraph?: boolean
   referenceDefinitions?: EditorConfig['referenceDefinitions']
 
@@ -323,6 +327,12 @@ export interface ProseKitEditorProps {
   bulletAfterHeading?: boolean
 
   /**
+   * Deletes an empty first paragraph on Backspace. See
+   * `EditorProps.backspaceDeletesEmptyFirstBlock`.
+   */
+  backspaceDeletesEmptyFirstBlock?: boolean
+
+  /**
    * Replaces typed sequences like `->` with `→`. See `EditorProps.substitution`.
    */
   substitution?: boolean
@@ -426,6 +436,7 @@ export function ProseKitEditor({
   remoteMedia,
   linkPaste,
   bulletAfterHeading,
+  backspaceDeletesEmptyFirstBlock,
   substitution = true,
   frontmatter = false,
   blockHandle = true,
@@ -484,7 +495,9 @@ export function ProseKitEditor({
       remoteMedia,
       linkPaste,
       bulletAfterHeading,
+      backspaceDeletesEmptyFirstBlock,
       substitution,
+      singleParagraph,
       placeholder,
       readOnly,
       spellCheck,
@@ -519,7 +532,9 @@ export function ProseKitEditor({
       remoteMedia,
       linkPaste,
       bulletAfterHeading,
+      backspaceDeletesEmptyFirstBlock,
       substitution,
+      singleParagraph,
       placeholder,
       readOnly,
       spellCheck,
@@ -530,9 +545,7 @@ export function ProseKitEditor({
   )
 
   const [editor] = useState((): TypedEditor => {
-    const baseExtension = singleParagraph
-      ? union(defineEditorExtension(config), defineSingleParagraph())
-      : defineEditorExtension(config)
+    const baseExtension = defineEditorExtension(config)
     const extension =
       CodeBlockView === false
         ? baseExtension

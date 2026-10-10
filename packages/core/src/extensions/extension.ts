@@ -5,7 +5,6 @@ import {
   union,
   type Editor,
 } from '@prosekit/core'
-import { defineBlockquote } from '@prosekit/extensions/blockquote'
 import { defineDoc } from '@prosekit/extensions/doc'
 import { defineGapCursor } from '@prosekit/extensions/gap-cursor'
 import { defineModClickPrevention } from '@prosekit/extensions/mod-click-prevention'
@@ -14,6 +13,8 @@ import { defineText } from '@prosekit/extensions/text'
 import { defineVirtualSelection } from '@prosekit/extensions/virtual-selection'
 
 import { defineAtomMarkNavigation } from './atom-mark-navigation.ts'
+import { defineBackspaceEmptyFirstBlock } from './backspace-empty-first-block.ts'
+import { defineMeowdownBlockquote } from './blockquote.ts'
 import { defineBulletAfterHeading } from './bullet-after-heading.ts'
 import { defineClickBelow } from './click-below.ts'
 import { defineClipboard } from './clipboard/clipboard.ts'
@@ -56,6 +57,7 @@ import { definePendingReplacement } from './pending-replacement.ts'
 import { defineReadonly } from './readonly.ts'
 import { defineScrollToSelection } from './scroll-to-selection.ts'
 import { defineSelectDocBoundary } from './select-doc-boundary.ts'
+import { defineSingleParagraph } from './single-paragraph.ts'
 import { defineSoftBreak } from './soft-break.ts'
 import { defineSubstitution } from './substitution.ts'
 import { defineSystemSubstitutionGuard } from './system-substitution-guard.ts'
@@ -75,7 +77,7 @@ function defineEditorExtensionImpl(options: EditorExtensionOptions) {
     defineDoc(),
     defineDocFrontmatterAttr(),
     defineText(),
-    defineBlockquote(),
+    defineMeowdownBlockquote(),
     defineMeowdownList(),
     defineHeading(),
     defineTable(),
@@ -104,6 +106,9 @@ function defineEditorExtensionImpl(options: EditorExtensionOptions) {
     defineEmbedPaste((state) => !!getEditorConfig(state).embedPaste),
     defineLinkPaste((state) => !!getEditorConfig(state).linkPaste),
     defineBulletAfterHeading((state) => !!getEditorConfig(state).bulletAfterHeading),
+    defineBackspaceEmptyFirstBlock(
+      (state) => !!getEditorConfig(state).backspaceDeletesEmptyFirstBlock,
+    ),
     defineSubstitution((state) => !!getEditorConfig(state).substitution),
     defineWikilinkTrigger((state) => !!getEditorConfig(state).wikilinkEnabled),
     definePlaceholder({
@@ -128,6 +133,7 @@ function defineEditorExtensionImpl(options: EditorExtensionOptions) {
     defineSoftBreak(),
     defineMoveBlock(),
     defineSelectDocBoundary(),
+    defineSingleParagraph(),
     defineInlineMarkPlugin(getEditorConfig),
     defineInlineToggle(),
     defineLinkCommands(),
