@@ -29,6 +29,31 @@ describe('bareAutolink', () => {
     it('right after an opening paren', () => {
       expect(urls('(google.com)')).toEqual([[1, 11, 'google.com']])
     })
+
+    it('right after an emphasis or strikethrough marker', () => {
+      expect(urls('*google.com*')).toEqual([[1, 11, 'google.com']])
+      expect(urls('_google.com_')).toEqual([[1, 11, 'google.com']])
+      expect(urls('~google.com~')).toEqual([[1, 11, 'google.com']])
+    })
+
+    it('after non-ASCII whitespace', () => {
+      expect(urls('see\u{3000}google.com')).toEqual([[4, 14, 'google.com']])
+      expect(urls('see\u{A0}google.com')).toEqual([[4, 14, 'google.com']])
+    })
+  })
+
+  describe('ignores a domain glued to the text before it', () => {
+    for (const text of [
+      'a+google.com',
+      '.google.com',
+      '-google.com',
+      'égoogle.com',
+      '中google.com',
+    ]) {
+      it(text, () => {
+        expect(urls(text)).toEqual([])
+      })
+    }
   })
 
   describe('ignores text that is not a linkable bare domain', () => {

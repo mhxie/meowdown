@@ -1,12 +1,20 @@
-import type { MarkdownConfig } from '@lezer/markdown'
+import type { InlineContext, MarkdownConfig } from '@lezer/markdown'
 
 import { hostFromUrl, isLinkableBareHost } from './autolink-tld.ts'
 import {
   CHAR_0,
   CHAR_9,
+  CHAR_ASTERISK,
+  CHAR_CARRIAGE_RETURN,
   CHAR_HYPHEN_MINUS,
+  CHAR_LEFT_PARENTHESIS,
   CHAR_LOWERCASE_A,
   CHAR_LOWERCASE_Z,
+  CHAR_MAX_ASCII,
+  CHAR_SPACE,
+  CHAR_TAB,
+  CHAR_TILDE,
+  CHAR_UNDERSCORE,
   CHAR_UPPERCASE_A,
   CHAR_UPPERCASE_Z,
 } from './unicode.ts'
@@ -14,11 +22,34 @@ import {
 // A domain (one or more labels, at least one dot) plus an optional path.
 const DOMAIN_RE = /^[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s<]*)?/i
 
-// Chars that may sit immediately before a bare autolink: whitespace or one of
-// `( * _ ~`. Mirrors GFM's "start of line, after whitespace, or one of these"
-// boundary rule. A `.`, `-`, alphanumeric, or `@` before the match means we are
-// mid-word or mid-email, so no autolink starts there.
-export const BOUNDARY_BEFORE_RE = /[\s(*_~]/
+const WHITESPACE_RE = /\s/
+
+/**
+ * Whether a bare autolink may start at `pos`: at the start of the inline text,
+ * after whitespace, or after one of `( * _ ~`. Mirrors GFM's "start of line,
+ * after whitespace, or one of these" boundary rule. A `.`, `-`, alphanumeric,
+ * or `@` before the match means we are mid-word or mid-email, so no autolink
+ * starts there.
+ *
+ * The autolink parsers ask this at every alphanumeric character, so it reads
+ * the char code instead of slicing a string for a regex.
+ */
+export function isAutolinkBoundaryBefore(cx: InlineContext, pos: number): boolean {
+  if (pos <= cx.offset) return true
+  const code = cx.char(pos - 1)
+  if (
+    code === CHAR_LEFT_PARENTHESIS ||
+    code === CHAR_ASTERISK ||
+    code === CHAR_UNDERSCORE ||
+    code === CHAR_TILDE
+  ) {
+    return true
+  }
+  // `\s` in ASCII: tab, line feed, vertical tab, form feed, carriage return, space.
+  if (code <= CHAR_MAX_ASCII)
+    return code === CHAR_SPACE || (code >= CHAR_TAB && code <= CHAR_CARRIAGE_RETURN)
+  return WHITESPACE_RE.test(String.fromCharCode(code))
+}
 
 function isDomainStartChar(code: number): boolean {
   return (
@@ -78,10 +109,7 @@ export const bareAutolink: MarkdownConfig = {
       name: 'BareAutolink',
       before: 'Link',
       parse(cx, next, pos) {
-        if (!isDomainStartChar(next) || cx.hasOpenLink) return -1
-
-        const before = cx.slice(pos - 1, pos)
-        if (before !== '' && !BOUNDARY_BEFORE_RE.test(before)) return -1
+        if (!isDomainStartChar(next) || !isAutolinkBoundaryBefore(cx, pos)) return -1
 
         const match = DOMAIN_RE.exec(cx.slice(pos, cx.end))
         if (!match) return -1
@@ -91,6 +119,8 @@ export const bareAutolink: MarkdownConfig = {
 
         const text = match[0].slice(0, length)
         if (!isLinkableBareHost(hostFromUrl(text))) return -1
+        // Last: it scans every element parsed so far in the paragraph.
+        if (cx.hasOpenLink) return -1
 
         return cx.addElement(cx.elt('URL', pos, pos + length))
       },

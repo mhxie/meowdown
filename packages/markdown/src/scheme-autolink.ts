@@ -1,6 +1,6 @@
 import type { MarkdownConfig } from '@lezer/markdown'
 
-import { BOUNDARY_BEFORE_RE, trimAutolinkEnd } from './bare-autolink.ts'
+import { isAutolinkBoundaryBefore, trimAutolinkEnd } from './bare-autolink.ts'
 import {
   CHAR_LOWERCASE_A,
   CHAR_LOWERCASE_Z,
@@ -38,10 +38,7 @@ export const schemeAutolink: MarkdownConfig = {
       name: 'SchemeAutolink',
       after: 'Autolink',
       parse(cx, next, pos) {
-        if (!isSchemeStartChar(next) || cx.hasOpenLink) return -1
-
-        const before = cx.slice(pos - 1, pos)
-        if (before !== '' && !BOUNDARY_BEFORE_RE.test(before)) return -1
+        if (!isSchemeStartChar(next) || !isAutolinkBoundaryBefore(cx, pos)) return -1
 
         const match = SCHEME_URI_RE.exec(cx.slice(pos, cx.end))
         if (!match) return -1
@@ -50,6 +47,8 @@ export const schemeAutolink: MarkdownConfig = {
         // Trailing-punctuation trimming may leave a tail-less `scheme://`.
         const tailStart = match[0].indexOf('://') + 3
         if (length <= tailStart) return -1
+        // Last: it scans every element parsed so far in the paragraph.
+        if (cx.hasOpenLink) return -1
 
         return cx.addElement(cx.elt('URL', pos, pos + length))
       },
