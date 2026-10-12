@@ -30,16 +30,16 @@ export interface FilePasteOptions {
    * A file `shouldEmbedFile` accepts inserts `![](src)`; any other file
    * inserts a `[name](src)` link.
    */
-  onFilePaste?: FilePasteHandler
+  onFilePaste?: FilePasteHandler | undefined
   /**
    * Called when persisting a pasted/dropped file throws. Defaults to `console.error`.
    */
-  onFileSaveError?: FileSaveErrorHandler
+  onFileSaveError?: FileSaveErrorHandler | undefined
   /**
    * Choose which saved files embed as `![](src)`. Defaults to
    * {@link isImageFile}: images embed, every other file is linked.
    */
-  shouldEmbedFile?: FileEmbedPredicate
+  shouldEmbedFile?: FileEmbedPredicate | undefined
   /**
    * Title a blank document from the files pasted or dropped into it. When the
    * document is an empty leading heading with no other text (a new, untitled
@@ -47,7 +47,7 @@ export interface FilePasteOptions {
    * on its own line after it, instead of into the heading. Omit to insert files
    * where they land.
    */
-  titleFromFile?: FileTitleResolver
+  titleFromFile?: FileTitleResolver | undefined
 }
 
 /**
@@ -73,7 +73,7 @@ export function isImageFile(file: { name: string; type?: string }): boolean {
  * produces markdown byte-identical to a paste/drop.
  */
 export function buildFileMarkdown(
-  file: { name: string; type?: string },
+  file: { name: string; type?: string | undefined },
   destination: string,
   shouldEmbedFile: FileEmbedPredicate = isImageFile,
 ): string {

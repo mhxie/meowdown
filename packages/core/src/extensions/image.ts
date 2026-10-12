@@ -91,22 +91,22 @@ export interface ImageOptions {
    * resolved image does not shift the layout. Defaults to
    * `defaultResolveImageUrl`.
    */
-  resolveImageUrl?: ImageUrlResolver
+  resolveImageUrl?: ImageUrlResolver | undefined
   /**
    * Resolve the data behind an X post URL.
    * When omitted, public posts use `defaultResolveXPost`.
    */
-  resolveXPost?: XPostResolver
+  resolveXPost?: XPostResolver | undefined
   /**
    * Additional trusted protocols for X media URLs, such as `reflect-asset:`.
    */
-  mediaUrlProtocols?: string[]
+  mediaUrlProtocols?: string[] | undefined
   /**
    * Resolve the data behind a YouTube video URL, rendered as a
    * `meowdown-embed-youtube` card. Defaults to `defaultResolveYouTubeVideo`,
    * which reads YouTube's oEmbed endpoint.
    */
-  resolveYouTubeVideo?: YouTubeVideoResolver
+  resolveYouTubeVideo?: YouTubeVideoResolver | undefined
   /**
    * Render X post and YouTube embeds as cards. Defaults to `true`. When
    * `false`, an embed shows its source URL as plain text instead: no saved
@@ -115,7 +115,7 @@ export interface ImageOptions {
    * remote images filters there too. Changing it re-renders every image and
    * embed, so a resolver that follows the same switch is asked again.
    */
-  remoteMedia?: boolean
+  remoteMedia?: boolean | undefined
 }
 
 /**
