@@ -38,11 +38,11 @@ export interface SerializeMarkdownAstOptions {
   /**
    * Whether to serialize the doc's `frontmatter` attribute as a leading `---` block. Off by default.
    */
-  frontmatter?: boolean
+  frontmatter?: boolean | undefined
   /**
    * Observe literal text positions in the serialized snapshot, excluding structural prefixes.
    */
-  onText?: (mapping: MarkdownTextMapping) => void
+  onText?: ((mapping: MarkdownTextMapping) => void) | undefined
 }
 
 /**

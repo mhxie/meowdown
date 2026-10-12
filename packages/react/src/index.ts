@@ -1,11 +1,4 @@
-import { MarkdownEditor } from './components/editor.tsx'
-
 export { MarkdownEditor, type EditorMode, type EditorProps } from './components/editor.tsx'
-
-/**
- * @deprecated Use `MarkdownEditor` instead.
- */
-export const MeowdownEditor = MarkdownEditor
 
 export type { NoteEmbedPayload, NoteEmbedRenderer } from './components/note-embed.ts'
 export {

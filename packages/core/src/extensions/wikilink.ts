@@ -27,20 +27,20 @@ export interface WikilinkResolution {
   /**
    * Target passed to click and hover handlers. Defaults to the bracketed text.
    */
-  target?: string
+  target?: string | undefined
   /**
    * Label shown in place of the source. Defaults to the target.
    */
-  display?: string
+  display?: string | undefined
   /**
    * Render as a compact numbered reference. Numbers follow rendered document
    * order via CSS; the resolver must not count or rewrite source labels.
    */
-  appearance?: 'reference'
+  appearance?: 'reference' | undefined
   /**
    * Additional accessible description and hover text for a reference.
    */
-  description?: string
+  description?: string | undefined
 }
 
 /**
@@ -56,7 +56,7 @@ export type WikilinkResolver = (link: WikilinkPayload) => WikilinkResolution | u
  * Host options for wikilink parsing.
  */
 export interface WikilinkOptions {
-  resolveWikilink?: WikilinkResolver
+  resolveWikilink?: WikilinkResolver | undefined
 }
 
 /**
