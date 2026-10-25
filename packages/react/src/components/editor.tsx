@@ -39,6 +39,7 @@ import {
 
 import type { TimeFormat } from '../utils/date-format.ts'
 
+import type { CollisionBoundary } from './collision-boundary.ts'
 import type { NoteEmbedRenderer } from './note-embed.ts'
 import { ProseKitEditor } from './prosekit-editor.tsx'
 import type {
@@ -130,6 +131,13 @@ export interface EditorProps {
    * is set. Ignored when `readOnly` is set.
    */
   selectionMenuAffordance?: boolean | undefined
+
+  /**
+   * The element the editor's menus and popovers stay inside, for example one
+   * that leaves out the area under a phone's status bar. Defaults to the
+   * viewport.
+   */
+  collisionBoundary?: CollisionBoundary | undefined
 
   /**
    * Extra controls rendered in the pending-replacement preview footer, next to
@@ -474,6 +482,7 @@ export function MarkdownEditor({
   onWikilinkSearch,
   onSelectionMenuSearch,
   selectionMenuAffordance = true,
+  collisionBoundary,
   pendingReplacementActions,
   onPendingReplacementResolve,
   onWikilinkClick,
@@ -632,6 +641,7 @@ export function MarkdownEditor({
         onWikilinkSearch={onWikilinkSearch}
         onSelectionMenuSearch={onSelectionMenuSearch}
         selectionMenuAffordance={selectionMenuAffordance}
+        collisionBoundary={collisionBoundary}
         pendingReplacementActions={pendingReplacementActions}
         onPendingReplacementResolve={onPendingReplacementResolve}
         onWikilinkClick={onWikilinkClick}

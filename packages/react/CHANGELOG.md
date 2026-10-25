@@ -1,5 +1,29 @@
 # @meowdown/react
 
+## 0.81.1
+
+### Patch Changes
+
+- [#716](https://github.com/prosekit/meowdown/pull/716) [`609552d`](https://github.com/prosekit/meowdown/commit/609552d730f74f489197925e7aa7f8607c1625f4) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Avoid re-rendering the code block language picker on every keystroke.
+
+- [#712](https://github.com/prosekit/meowdown/pull/712) [`b9c9e84`](https://github.com/prosekit/meowdown/commit/b9c9e846e8e98eeabb2f240706e8c15cafb9599c) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Avoid re-rendering the selection menu on every keystroke.
+
+- [#714](https://github.com/prosekit/meowdown/pull/714) [`c435518`](https://github.com/prosekit/meowdown/commit/c435518852d69d78f912682ac47ef034f3287576) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Avoid re-rendering the built-in slash menu items on every query change.
+
+- [#711](https://github.com/prosekit/meowdown/pull/711) [`c7db252`](https://github.com/prosekit/meowdown/commit/c7db2523c6d2b933b5b897c7e36c86e62089cebf) Thanks [@ocavue](https://github.com/ocavue)! - Avoid re-rendering the table handle on every editor update.
+
+## 0.81.0
+
+### Minor Changes
+
+- [#706](https://github.com/prosekit/meowdown/pull/706) [`eb70e1b`](https://github.com/prosekit/meowdown/commit/eb70e1b4cde5e4eaf7a566a694c39a10f654431a) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Add `collisionBoundary` to keep menus inside an area.
+
+### Patch Changes
+
+- [#705](https://github.com/prosekit/meowdown/pull/705) [`bc09e5b`](https://github.com/prosekit/meowdown/commit/bc09e5b7b9aeabb5acb4876009a8b9715ab6ce39) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Keep the selection menu visible for tall selections.
+- Updated dependencies [[`9ba79c9`](https://github.com/prosekit/meowdown/commit/9ba79c99e177c1cda9d478abc8114456e6323aab), [`e1e0e2f`](https://github.com/prosekit/meowdown/commit/e1e0e2fc38bff102ff4b5eb0bb23a6846a258e66), [`318b69f`](https://github.com/prosekit/meowdown/commit/318b69fac1c664e5771070a4c81e30f349771589)]:
+  - @meowdown/core@0.81.2
+
 ## 0.80.3
 
 ### Patch Changes

@@ -55,6 +55,7 @@ import type { TimeFormat } from '../utils/date-format.ts'
 import { markHostContent } from '../utils/host-content.ts'
 
 import { BlockHandle } from './block-handle.tsx'
+import { CollisionBoundaryContext, type CollisionBoundary } from './collision-boundary.ts'
 import { DropIndicator } from './drop-indicator.tsx'
 import { EditorExtensions } from './editor-extensions.tsx'
 import { LinkMenu } from './link-menu.tsx'
@@ -178,6 +179,11 @@ export interface ProseKitEditorProps {
    * Shows the selection affordance. See `EditorProps.selectionMenuAffordance`.
    */
   selectionMenuAffordance?: boolean
+
+  /**
+   * Keeps menus and popovers inside an element. See `EditorProps.collisionBoundary`.
+   */
+  collisionBoundary?: CollisionBoundary | undefined
 
   /**
    * Extra pending-replacement controls. See `EditorProps.pendingReplacementActions`.
@@ -406,6 +412,7 @@ export function ProseKitEditor({
   onWikilinkSearch,
   onSelectionMenuSearch,
   selectionMenuAffordance = true,
+  collisionBoundary,
   pendingReplacementActions,
   onPendingReplacementResolve,
   onWikilinkClick,
@@ -721,55 +728,57 @@ export function ProseKitEditor({
   )
 
   return (
-    <ProseKit editor={editor}>
-      {/* Before the editor element, so a document height change below the
+    <CollisionBoundaryContext value={collisionBoundary}>
+      <ProseKit editor={editor}>
+        {/* Before the editor element, so a document height change below the
           caret cannot move the layer. */}
-      <VirtualCaret />
-      <div ref={mount}></div>
-      <EditorExtensions
-        config={config}
-        searchQuery={searchQuery}
-        onDocChange={handleDocChange}
-        onSearchChange={onSearchChange}
-      />
-      {renderNoteEmbed && resolveWikiEmbed ? (
-        <NoteEmbedViews renderNoteEmbed={renderNoteEmbed} />
-      ) : null}
-      {blockHandle && !readOnly && <BlockHandle />}
-      {!readOnly && <TableHandle />}
-      {blockHandle && !readOnly && <DropIndicator />}
-      <SlashMenu
-        timeFormat={timeFormat}
-        onSlashMenuSearch={onSlashMenuSearch}
-        onFilePaste={onFilePaste}
-        onFileSaveError={onFileSaveError}
-        shouldEmbedFile={shouldEmbedFile}
-      />
-      <LinkMenu
-        key={String(readOnly)}
-        onLinkClick={onLinkClick}
-        onLinkCopy={onLinkCopy}
-        resolveLinkPreview={resolveLinkPreview}
-        readOnly={readOnly}
-      />
-      {onTagSearch && <TagMenu onTagSearch={onTagSearch} />}
-      {onWikilinkSearch && <WikilinkMenu onWikilinkSearch={onWikilinkSearch} />}
-      {onSelectionMenuSearch && !readOnly && (
-        <SelectionMenu
-          onSelectionMenuSearch={onSelectionMenuSearch}
-          context={selectionMenuContext}
-          onOpen={openSelectionMenu}
-          onClose={closeSelectionMenu}
-          affordance={selectionMenuAffordance}
+        <VirtualCaret />
+        <div ref={mount}></div>
+        <EditorExtensions
+          config={config}
+          searchQuery={searchQuery}
+          onDocChange={handleDocChange}
+          onSearchChange={onSearchChange}
         />
-      )}
-      {!readOnly && (
-        <PendingReplacementPreview
-          actions={pendingReplacementActions}
-          onResolve={onPendingReplacementResolve}
+        {renderNoteEmbed && resolveWikiEmbed ? (
+          <NoteEmbedViews renderNoteEmbed={renderNoteEmbed} />
+        ) : null}
+        {blockHandle && !readOnly && <BlockHandle />}
+        {!readOnly && <TableHandle />}
+        {blockHandle && !readOnly && <DropIndicator />}
+        <SlashMenu
+          timeFormat={timeFormat}
+          onSlashMenuSearch={onSlashMenuSearch}
+          onFilePaste={onFilePaste}
+          onFileSaveError={onFileSaveError}
+          shouldEmbedFile={shouldEmbedFile}
         />
-      )}
-      {children}
-    </ProseKit>
+        <LinkMenu
+          key={String(readOnly)}
+          onLinkClick={onLinkClick}
+          onLinkCopy={onLinkCopy}
+          resolveLinkPreview={resolveLinkPreview}
+          readOnly={readOnly}
+        />
+        {onTagSearch && <TagMenu onTagSearch={onTagSearch} />}
+        {onWikilinkSearch && <WikilinkMenu onWikilinkSearch={onWikilinkSearch} />}
+        {onSelectionMenuSearch && !readOnly && (
+          <SelectionMenu
+            onSelectionMenuSearch={onSelectionMenuSearch}
+            context={selectionMenuContext}
+            onOpen={openSelectionMenu}
+            onClose={closeSelectionMenu}
+            affordance={selectionMenuAffordance}
+          />
+        )}
+        {!readOnly && (
+          <PendingReplacementPreview
+            actions={pendingReplacementActions}
+            onResolve={onPendingReplacementResolve}
+          />
+        )}
+        {children}
+      </ProseKit>
+    </CollisionBoundaryContext>
   )
 }
