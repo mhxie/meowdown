@@ -369,6 +369,41 @@ export interface ProseKitEditorProps {
   spellCheck?: boolean
 
   /**
+   * Enables or disables the system's writing suggestions in the editor.
+   */
+  writingSuggestions?: boolean
+
+  /**
+   * Enables or disables autocorrect in the editor.
+   */
+  autoCorrect?: boolean
+
+  /**
+   * How the virtual keyboard capitalizes text in the editor.
+   */
+  autoCapitalize?: EditorConfig['autoCapitalize']
+
+  /**
+   * The label of the Enter key on the virtual keyboard.
+   */
+  enterKeyHint?: EditorConfig['enterKeyHint']
+
+  /**
+   * The text direction of the editor.
+   */
+  dir?: EditorConfig['dir']
+
+  /**
+   * The language of the editor content.
+   */
+  lang?: string
+
+  /**
+   * The accessible name of the editor.
+   */
+  ariaLabel?: string
+
+  /**
    * The search query. See `EditorProps.searchQuery`.
    */
   searchQuery?: string
@@ -450,6 +485,13 @@ export function ProseKitEditor({
   placeholder,
   readOnly,
   spellCheck,
+  writingSuggestions,
+  autoCorrect,
+  autoCapitalize,
+  enterKeyHint,
+  dir,
+  lang,
+  ariaLabel,
   searchQuery = '',
   onSearchChange,
   timeFormat,
@@ -508,6 +550,13 @@ export function ProseKitEditor({
       placeholder,
       readOnly,
       spellCheck,
+      writingSuggestions,
+      autoCorrect,
+      autoCapitalize,
+      enterKeyHint,
+      dir,
+      lang,
+      ariaLabel,
       editorClassName,
       wikilinkEnabled,
       referenceDefinitions,
@@ -545,6 +594,13 @@ export function ProseKitEditor({
       placeholder,
       readOnly,
       spellCheck,
+      writingSuggestions,
+      autoCorrect,
+      autoCapitalize,
+      enterKeyHint,
+      dir,
+      lang,
+      ariaLabel,
       editorClassName,
       wikilinkEnabled,
       referenceDefinitions,
