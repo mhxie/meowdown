@@ -8,11 +8,6 @@ dedupePeers: true
 
 strictPeerDependencies: true
 
-peerDependencyRules:
-  allowedVersions:
-    # TODO: Remove this once https://github.com/vitest-community/vitest-browser-react/pull/63 is fixed and released
-    vitest-browser-react>vitest: '5'
-
 trustPolicy: no-downgrade
 
 trustPolicyIgnoreAfter: 10080 # 7 days
@@ -29,6 +24,12 @@ minimumReleaseAgeExclude:
   - eslint-plugin-ocavue
   - vitest-browser-commands
   - prosemirror-flat-list
+  - '@tsdown/css@0.23.3'
+  - tsdown@0.23.3
+
+peerDependencyRules:
+  allowedVersions:
+    oxc-transform-react: 0.x
 
 allowBuilds:
   esbuild: false

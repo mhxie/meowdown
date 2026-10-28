@@ -652,13 +652,15 @@ function FileView(props: {
     if (!resolveFileInfo) return
     let active = true
     const load = async (): Promise<void> => {
+      let info: Awaited<ReturnType<FileInfoResolver>>
       try {
-        const info = await resolveFileInfo(href)
-        if (!active || info?.size == null || !Number.isFinite(info.size) || info.size < 0) return
-        setResolvedSize({ href, resolver: resolveFileInfo, text: formatFileSize(info.size) })
+        info = await resolveFileInfo(href)
       } catch (error) {
         console.error('[meowdown] resolveFileInfo failed:', error)
+        return
       }
+      if (!active || info?.size == null || !Number.isFinite(info.size) || info.size < 0) return
+      setResolvedSize({ href, resolver: resolveFileInfo, text: formatFileSize(info.size) })
     }
     void load()
     return () => {
@@ -741,7 +743,7 @@ function CodeBlock({ code, language }: { code: string; language: string }): Reac
   )
   const tokens = useMaybePromise(result) ?? []
   return (
-    <pre data-language={language || undefined}>
+    <pre data-code-block="" data-language={language || undefined}>
       <code>{tokens.length > 0 ? renderTokens(code, tokens) : code}</code>
     </pre>
   )
