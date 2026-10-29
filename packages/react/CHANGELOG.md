@@ -1,5 +1,16 @@
 # @meowdown/react
 
+## 0.82.2
+
+### Patch Changes
+
+- [#736](https://github.com/prosekit/meowdown/pull/736) [`826bc6a`](https://github.com/prosekit/meowdown/commit/826bc6a538f137271d2005ce83a72bb7a4cf7d4f) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Rework block spacing.
+
+- [#718](https://github.com/prosekit/meowdown/pull/718) [`b837170`](https://github.com/prosekit/meowdown/commit/b83717032fd1ecf709f8586b979de0b6e337c86e) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Mount the table handle menu items only while a menu is open.
+- Updated dependencies [[`e63ad78`](https://github.com/prosekit/meowdown/commit/e63ad788c52cadb0ee0ba9dd629587adf6665bc2), [`75c58e0`](https://github.com/prosekit/meowdown/commit/75c58e083a0bffb929c3ce97024b2b8a162d689d), [`826bc6a`](https://github.com/prosekit/meowdown/commit/826bc6a538f137271d2005ce83a72bb7a4cf7d4f), [`5430959`](https://github.com/prosekit/meowdown/commit/5430959467c567f940e72eb90dcd289185c9a5c6)]:
+  - @meowdown/markdown@0.78.0
+  - @meowdown/core@0.83.0
+
 ## 0.82.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @meowdown/markdown
 
+## 0.78.0
+
+### Minor Changes
+
+- [#720](https://github.com/prosekit/meowdown/pull/720) [`e63ad78`](https://github.com/prosekit/meowdown/commit/e63ad788c52cadb0ee0ba9dd629587adf6665bc2) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Keep a block that starts right under the YAML frontmatter on that line.
+
 ## 0.77.0
 
 ### Minor Changes

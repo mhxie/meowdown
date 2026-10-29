@@ -1,5 +1,21 @@
 # @meowdown/core
 
+## 0.83.0
+
+### Minor Changes
+
+- [#720](https://github.com/prosekit/meowdown/pull/720) [`e63ad78`](https://github.com/prosekit/meowdown/commit/e63ad788c52cadb0ee0ba9dd629587adf6665bc2) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Keep a block that starts right under the YAML frontmatter on that line.
+
+- [#736](https://github.com/prosekit/meowdown/pull/736) [`826bc6a`](https://github.com/prosekit/meowdown/commit/826bc6a538f137271d2005ce83a72bb7a4cf7d4f) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Rework block spacing.
+
+### Patch Changes
+
+- [#743](https://github.com/prosekit/meowdown/pull/743) [`75c58e0`](https://github.com/prosekit/meowdown/commit/75c58e083a0bffb929c3ce97024b2b8a162d689d) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Hide the native caret while a node is selected.
+
+- [#744](https://github.com/prosekit/meowdown/pull/744) [`5430959`](https://github.com/prosekit/meowdown/commit/5430959467c567f940e72eb90dcd289185c9a5c6) Thanks [@ocavuebot](https://github.com/ocavuebot)! - Fix table selection borders.
+- Updated dependencies [[`e63ad78`](https://github.com/prosekit/meowdown/commit/e63ad788c52cadb0ee0ba9dd629587adf6665bc2)]:
+  - @meowdown/markdown@0.78.0
+
 ## 0.82.0
 
 ### Minor Changes
