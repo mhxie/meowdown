@@ -30,6 +30,13 @@ jobs:
         run: pnpm run fix
 
       - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        if: github.repository == 'prosekit/meowdown'
+
+      - name: Verify fixes are committed
+        if: github.repository != 'prosekit/meowdown'
+        run: |
+          git add --all
+          git diff --cached --exit-code
 
   visual:
     runs-on: ${{ matrix.config.runner }}
@@ -111,3 +118,10 @@ jobs:
           oxipng --opt max --strip safe $changed
 
       - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        if: github.repository == 'prosekit/meowdown'
+
+      - name: Verify fixes are committed
+        if: github.repository != 'prosekit/meowdown'
+        run: |
+          git add --all
+          git diff --cached --exit-code

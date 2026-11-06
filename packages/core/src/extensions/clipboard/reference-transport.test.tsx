@@ -1,6 +1,7 @@
 import { parseReferenceDefinition, serializeReferenceDefinition } from '@meowdown/markdown'
-import { createTestEditor, pasteHTML } from '@prosekit/core/test'
-import { describe, expect, it } from 'vitest'
+import { pasteHTML } from '@meowdown/vitest/clipboard'
+import { createTestEditor } from '@prosekit/core/test'
+import { describe, expect, it, vi } from 'vitest'
 
 import { markdownToDoc } from '../../converters/md-to-pm.ts'
 import { docToMarkdown } from '../../converters/pm-to-md.ts'
@@ -135,6 +136,23 @@ describe('reference clipboard transport', () => {
     pasteHTML(to.view, html)
     expect(collectReferenceDefinitions(to.view.state.doc).definitions.size).toBe(1)
     expect(docToMarkdown(to.view.state.doc)).toContain('[x] and [x][].')
+  })
+
+  it('preserves reference metadata when a synthetic paste event discards its data', () => {
+    using from = setupFixture({ containerId: 'source' })
+    from.set(markdownToDoc(source, { nodes: from.editor.nodes }))
+    const doc = from.view.state.doc
+    const html = from.view.serializeForClipboard(doc.slice(0, doc.firstChild!.nodeSize)).dom
+      .innerHTML
+    using to = setupFixture({ containerId: 'target' })
+    using _clipboardData = vi
+      .spyOn(ClipboardEvent.prototype, 'clipboardData', 'get')
+      .mockReturnValue(new DataTransfer())
+    pasteHTML(to.view, html)
+    expect(collectReferenceDefinitions(to.view.state.doc).definitions.get('X')).toMatchObject({
+      href: 'https://example.org/paper',
+      title: 'p. 12',
+    })
   })
 
   it('carries definitions through a drop and preserves a same-URL locator collision', () => {
