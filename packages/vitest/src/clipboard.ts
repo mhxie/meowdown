@@ -1,5 +1,20 @@
 import { sleep } from '@ocavue/utils'
+import type { EditorView } from '@prosekit/pm/view'
 import { userEvent } from 'vitest/browser'
+
+/**
+ * Paste HTML with its clipboard metadata intact in every test browser.
+ */
+export function pasteHTML(view: EditorView, html: string): void {
+  const clipboardData = new DataTransfer()
+  clipboardData.setData('text/html', html)
+  const event = new ClipboardEvent('paste', { clipboardData })
+  // Firefox replaces constructor-supplied data with an empty DataTransfer.
+  if (event.clipboardData?.getData('text/html') !== html) {
+    Object.defineProperty(event, 'clipboardData', { value: clipboardData })
+  }
+  view.pasteHTML(html, event)
+}
 
 export async function readClipboard(): Promise<{ html: string; text: string }> {
   const dummy = document.createElement('div')

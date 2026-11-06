@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   release:
+    if: github.repository == 'prosekit/meowdown'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
