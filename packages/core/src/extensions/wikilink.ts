@@ -1,6 +1,8 @@
 import { defineMarkView, union, type PlainExtension } from '@prosekit/core'
 import type { MarkViewConstructor } from '@prosekit/pm/view'
 
+import { guardMarkView } from '../utils/guard-mark-view.ts'
+
 import type { MdWikilinkAttrs } from './inline-marks.ts'
 import type { MarkName } from './mark-names.ts'
 import { defineWikilinkSourceEditing } from './wikilink-source.ts'
@@ -121,7 +123,7 @@ export function defineWikilink(): PlainExtension {
   return union(
     defineMarkView({
       name: 'mdWikilink' satisfies MarkName,
-      constructor: createWikilinkMarkView(),
+      constructor: guardMarkView(createWikilinkMarkView()),
     }),
     defineWikilinkSourceEditing(),
   ) as PlainExtension

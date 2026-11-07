@@ -12,6 +12,7 @@ import {
   type ResizeEndEvent,
 } from '@prosekit/web/resizable'
 
+import { guardMarkView } from '../utils/guard-mark-view.ts'
 import { NON_PROSE_ATTRS } from '../utils/non-prose-attrs.ts'
 
 import type { MdImageAttrs } from './inline-marks.ts'
@@ -794,7 +795,9 @@ export function defineImage(
   return union(
     defineMarkView({
       name: 'mdImage' satisfies MarkName,
-      constructor: (mark, view) => new ImageMarkView(mark, view, getOptions?.(view.state) ?? {}),
+      constructor: guardMarkView(
+        (mark, view) => new ImageMarkView(mark, view, getOptions?.(view.state) ?? {}),
+      ),
     }) as PlainExtension,
     defineImageRefresh(getOptions),
   )
