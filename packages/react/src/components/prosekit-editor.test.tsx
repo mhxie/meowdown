@@ -1,6 +1,7 @@
 import '../testing/index.ts'
 
 import { getEditorConfig } from '@meowdown/core'
+import { noop } from '@ocavue/utils'
 import { definePlugin } from '@prosekit/core'
 import { Plugin } from '@prosekit/pm/state'
 import { createRef } from 'react'
@@ -72,7 +73,7 @@ describe('ProseKitEditor', () => {
     const onDocChange = vi.fn(() => {
       throw error
     })
-    const reportErrorSpy = vi.spyOn(globalThis, 'reportError').mockImplementation(() => {})
+    const reportErrorSpy = vi.spyOn(globalThis, 'reportError').mockImplementation(noop)
     try {
       const ref = createRef<EditorHandle>()
       const screen = await render(
